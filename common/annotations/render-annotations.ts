@@ -35,8 +35,10 @@ import {
     ASB_TOKEN_HIGHLIGHT_CLASS,
 } from '@project/common/annotations';
 
-export const ANNOTATIONS_VIDEO_RENDER_BEHIND_MS = 15000; // Seeking backwards is usually 5-10s
-export const ANNOTATIONS_VIDEO_RENDER_AHEAD_MS = 60000; // Seeking forward is usually 5-30s
+// Subtitles with rich text are ~5KB per subtitle and so is not worth using a render window.
+// Having one also negatively affects other extensions such as JPDB Reader which relies on a stable DOM.
+// export const ANNOTATIONS_VIDEO_RENDER_BEHIND_MS = 15000; // Seeking backwards is usually 5-10s
+// export const ANNOTATIONS_VIDEO_RENDER_AHEAD_MS = 60000; // Seeking forward is usually 5-30s
 
 export interface InternalToken extends Token {
     __internal?: boolean;
@@ -253,10 +255,9 @@ const applyTokenStyle = (fullText: string, token: Token, prevPitch: PitchAccentC
     if (
         token.pitchAccent != null &&
         ss.enabledAnnotations.pitchAccent &&
-        (!token.readings.length ||
-            (ss.enabledAnnotations.reading && shouldUseAnnotation('reading', token.status!, token.states, ss.dt)))
+        tokenText.includes(`class="${ASB_PITCH_ACCENT_CLASS}"`)
     ) {
-        return `${s}>${tokenText}</span>`; // Colorize the pitch accent annotation only when being shown
+        return `${s}>${tokenText}</span>`; // Only colorize the pitch accent when pitch accent is being shown
     }
 
     const c = `${config.color}${config.alpha}`;

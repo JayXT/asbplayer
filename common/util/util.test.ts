@@ -1,8 +1,10 @@
 import {
+    areSubtitleModelsEqual,
     areTokenizationsEqual,
     arrayEquals,
     AsyncSemaphore,
     buildSubtitleTracks,
+    clamp,
     compareSubtitlesForDisplay,
     computeStyles,
     computeStyleString,
@@ -24,10 +26,14 @@ import {
     isNumeric,
     iterateOverStringInBlocks,
     joinSubtitles,
+    keysAreEqual,
     localizedDate,
     mapAsync,
     mockSurroundingSubtitles,
+    normalizeFinite,
     normalizeForSearch,
+    normalizeNonNegative,
+    normalizeNonPositive,
     normalizedLookupTerms,
     percentToHex2,
     seekWithNudge,
@@ -66,6 +72,33 @@ function textSubtitleSettings(overrides: Partial<TextSubtitleSettings> = {}): Te
     };
 }
 
+describe('numeric normalization', () => {
+    it('normalizes non-finite values to zero', () => {
+        expect(normalizeFinite(Number.NaN)).toBe(0);
+        expect(normalizeFinite(Number.POSITIVE_INFINITY)).toBe(0);
+        expect(normalizeFinite(Number.NaN, -5)).toBe(-5);
+        expect(normalizeFinite(-5)).toBe(-5);
+    });
+
+    it('normalizes values to the non-negative range', () => {
+        expect(normalizeNonNegative(-5)).toBe(0);
+        expect(normalizeNonNegative(Number.NaN)).toBe(0);
+        expect(normalizeNonNegative(5)).toBe(5);
+    });
+
+    it('normalizes values to the non-positive range', () => {
+        expect(normalizeNonPositive(5)).toBe(0);
+        expect(normalizeNonPositive(Number.NaN)).toBe(0);
+        expect(normalizeNonPositive(-5)).toBe(-5);
+    });
+
+    it('clamps values to a bounded range', () => {
+        expect(clamp(-1, 0, 10)).toBe(0);
+        expect(clamp(5, 0, 10)).toBe(5);
+        expect(clamp(11, 0, 10)).toBe(10);
+    });
+});
+
 describe('arrayEquals', () => {
     it('returns true for 0 items', () => {
         expect(arrayEquals([], [])).toBe(true);
@@ -91,6 +124,34 @@ describe('arrayEquals', () => {
                 (lhs, rhs) => lhs.value === rhs.value
             )
         ).toBe(false);
+    });
+});
+
+describe('keysAreEqual', () => {
+    it('treats 0-key objects as equal', () => {
+        expect(keysAreEqual({}, {})).toBe(true);
+    });
+
+    it('returns true for 1 matching key even when values differ', () => {
+        expect(keysAreEqual({ a: 1 }, { a: undefined })).toBe(true);
+    });
+
+    it('returns false when one side has an extra key', () => {
+        expect(keysAreEqual({ a: 1 }, { a: 1, b: 2 })).toBe(false);
+        expect(keysAreEqual({ a: 1, b: 2 }, { a: 1 })).toBe(false);
+    });
+
+    it('compares all keys for 2-key objects', () => {
+        expect(keysAreEqual({ a: 1, b: 2 }, { a: 3, b: 4 })).toBe(true);
+        expect(keysAreEqual({ a: 1, b: 2 }, { a: 3, c: 4 })).toBe(false);
+    });
+
+    it('compares own keys without counting inherited prototype keys', () => {
+        const objectWithInheritedKey = Object.create({ inherited: 1 });
+        objectWithInheritedKey.a = 1;
+
+        expect(keysAreEqual(objectWithInheritedKey, { a: 2 })).toBe(true);
+        expect(keysAreEqual(objectWithInheritedKey, { a: 2, inherited: 3 })).toBe(false);
     });
 });
 
@@ -794,6 +855,89 @@ describe('iterateOverStringInBlocks', () => {
             [2, 4, 'b'],
             [4, 6, undefined],
         ]);
+    });
+});
+
+describe('areSubtitleModelsEqual', () => {
+    const subtitle = {
+        text: 'subtitle',
+        displayTime: '00:01.000',
+        originalText: 'original subtitle',
+        textImage: {
+            dataUrl: 'data:image/png;base64,image',
+            screen: { width: 100, height: 50 },
+            image: { width: 200, height: 100 },
+        },
+        start: 1000,
+        end: 2000,
+        originalStart: 1000,
+        originalEnd: 2000,
+        track: 0,
+        index: 1,
+        tokenization: {
+            tokens: [
+                {
+                    pos: [0, 4],
+                    states: [],
+                    readings: [],
+                    frequency: 1,
+                },
+            ],
+        },
+    } as any;
+
+    it('compares independently allocated nested values', () => {
+        expect(
+            areSubtitleModelsEqual(subtitle, {
+                ...subtitle,
+                textImage: {
+                    dataUrl: subtitle.textImage.dataUrl,
+                    screen: { ...subtitle.textImage.screen },
+                    image: { ...subtitle.textImage.image },
+                },
+                tokenization: {
+                    tokens: [
+                        {
+                            ...subtitle.tokenization.tokens[0],
+                            pos: [...subtitle.tokenization.tokens[0].pos],
+                            states: [...subtitle.tokenization.tokens[0].states],
+                            readings: [...subtitle.tokenization.tokens[0].readings],
+                        },
+                    ],
+                },
+            })
+        ).toBe(true);
+    });
+
+    it.each([
+        ['text', { text: 'different' }],
+        ['display time', { displayTime: '00:02.000' }],
+        ['original text', { originalText: 'different original subtitle' }],
+        [
+            'text image',
+            {
+                textImage: {
+                    ...subtitle.textImage,
+                    image: { ...subtitle.textImage.image, width: 201 },
+                },
+            },
+        ],
+        ['start', { start: 1001 }],
+        ['end', { end: 2001 }],
+        ['original start', { originalStart: 1001 }],
+        ['original end', { originalEnd: 2001 }],
+        ['track', { track: 1 }],
+        ['index', { index: 2 }],
+        [
+            'tokenization',
+            {
+                tokenization: {
+                    tokens: [{ ...subtitle.tokenization.tokens[0], frequency: 2 }],
+                },
+            },
+        ],
+    ])('detects a change to the %s field', (_field, change) => {
+        expect(areSubtitleModelsEqual(subtitle, { ...subtitle, ...change })).toBe(false);
     });
 });
 
