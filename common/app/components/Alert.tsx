@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { makeStyles } from '@mui/styles';
 import MuiAlert, { type AlertColor } from '@mui/material/Alert';
 import Grow from '@mui/material/Grow';
-import { prepend, remove, type Stack } from './notification-stack';
+import { prepend, remove, update, type Stack } from './notification-stack';
 import LogoIcon from '../../components/LogoIcon';
 
 const useAlertStyles = makeStyles(() => ({
@@ -58,6 +58,7 @@ interface AlertNotification {
     children: React.ReactNode;
     severity: AlertColor | undefined;
     disableAutoHide: boolean;
+    open: boolean;
 }
 
 function toAlertNotification(
@@ -69,6 +70,7 @@ function toAlertNotification(
         children,
         severity,
         disableAutoHide: disableAutoHide ?? false,
+        open: true,
     };
 }
 
@@ -77,6 +79,7 @@ interface AlertItemProps extends AlertNotification {
     open: boolean;
     autoHideDuration: number;
     onClose: (id: number) => void;
+    onExitedAnimation: (id: number) => void;
     onMouseEnter?: () => void;
     onMouseLeave?: () => void;
 }
@@ -86,6 +89,7 @@ function AlertItem({
     open,
     autoHideDuration,
     onClose,
+    onExitedAnimation,
     onMouseEnter,
     onMouseLeave,
     children,
@@ -105,7 +109,7 @@ function AlertItem({
 
     return (
         <div className={classes.root}>
-            <Grow in={open}>
+            <Grow in={open} onExited={() => onExitedAnimation(id)}>
                 <MuiAlert
                     severity={severity}
                     icon={<LogoIcon fontSize="small" />}
@@ -134,8 +138,10 @@ export default function Alert(props: Props) {
     onCloseRef.current = props.onClose;
 
     const closeNotification = useCallback((id: number) => {
-        setNotifications((current) => remove(current, id));
+        setNotifications((current) => update(current, id, (item) => ({ ...item, open: false })));
     }, []);
+
+    const removeNotification = useCallback((id: number) => setNotifications((current) => remove(current, id)), []);
 
     useEffect(() => {
         if (props.open && notifications.length === 0 && hadNotificationsRef.current) {
@@ -176,12 +182,13 @@ export default function Alert(props: Props) {
                 <AlertItem
                     key={notification.id}
                     id={notification.id}
-                    open={props.open}
                     autoHideDuration={props.autoHideDuration}
                     onClose={closeNotification}
+                    onExitedAnimation={removeNotification}
                     onMouseEnter={props.onMouseEnter}
                     onMouseLeave={props.onMouseLeave}
                     {...notification.value}
+                    open={notification.value.open && props.open}
                 />
             ))}
         </AlertStack>
