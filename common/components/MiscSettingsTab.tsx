@@ -176,7 +176,6 @@ const MiscSettingTab: React.FC<Props> = ({
     return (
         <>
             <Stack spacing={1}>
-                <SettingsSection>{t('settings.ui')}</SettingsSection>
                 <Stack direction="row" spacing={1}>
                     <Button variant="contained" color="primary" style={{ flex: 1 }} onClick={handleImportSettings}>
                         {t('action.importSettings')}
@@ -185,6 +184,7 @@ const MiscSettingTab: React.FC<Props> = ({
                         {t('action.exportSettings')}
                     </Button>
                 </Stack>
+                <SettingsSection>{t('settings.ui')}</SettingsSection>
                 <FormControl>
                     <FormLabel>{t('settings.theme')}</FormLabel>
                     <RadioGroup row>
