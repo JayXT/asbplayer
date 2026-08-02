@@ -1812,6 +1812,7 @@ function App({
                     {!sources.videoFile && !inVideoPlayer && (
                         <Alert
                             open={alertOpen}
+                            useAppLogo={false}
                             onClose={handleAlertClosed}
                             autoHideDuration={3000}
                             severity={alertSeverity}

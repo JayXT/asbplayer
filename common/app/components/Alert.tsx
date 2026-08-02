@@ -45,6 +45,7 @@ export function AlertStack({ anchor, children }: AlertStackProps) {
 interface Props {
     open: boolean;
     autoHideDuration: number;
+    useAppLogo: boolean;
     onClose: () => void;
     onMouseEnter?: () => void;
     onMouseLeave?: () => void;
@@ -78,6 +79,7 @@ interface AlertItemProps extends AlertNotification {
     id: number;
     open: boolean;
     autoHideDuration: number;
+    useAppLogo: boolean;
     onClose: (id: number) => void;
     onExitedAnimation: (id: number) => void;
     onMouseEnter?: () => void;
@@ -88,6 +90,7 @@ function AlertItem({
     id,
     open,
     autoHideDuration,
+    useAppLogo,
     onClose,
     onExitedAnimation,
     onMouseEnter,
@@ -112,7 +115,7 @@ function AlertItem({
             <Grow in={open} onExited={() => onExitedAnimation(id)}>
                 <MuiAlert
                     severity={severity}
-                    icon={<LogoIcon fontSize="small" />}
+                    icon={useAppLogo ? <LogoIcon fontSize="small" /> : undefined}
                     onMouseEnter={onMouseEnter}
                     onMouseLeave={onMouseLeave}
                     style={{ pointerEvents: 'auto' }}
@@ -183,6 +186,7 @@ export default function Alert(props: Props) {
                     key={notification.id}
                     id={notification.id}
                     autoHideDuration={props.autoHideDuration}
+                    useAppLogo={props.useAppLogo}
                     onClose={closeNotification}
                     onExitedAnimation={removeNotification}
                     onMouseEnter={props.onMouseEnter}

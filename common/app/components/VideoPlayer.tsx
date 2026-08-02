@@ -1980,6 +1980,7 @@ export default function VideoPlayer({
                 onMouseLeave={resumePlaybackSnackbar.onMouseLeave}
                 autoHideDuration={0}
                 disableAutoHide={true}
+                useAppLogo={false}
                 severity="info"
                 anchor="bottom"
             >
@@ -1992,6 +1993,7 @@ export default function VideoPlayer({
                 autoHideDuration={3000}
                 severity={alertSeverity}
                 anchor={alertAnchor}
+                useAppLogo={false}
             >
                 {alertMessage}
             </Alert>

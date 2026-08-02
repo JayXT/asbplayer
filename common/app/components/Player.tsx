@@ -1357,6 +1357,7 @@ function PlayerComponent(
         <div onMouseMove={handleMouseMove} className={classes.root}>
             <Alert
                 open={resumePlaybackSnackbar.open}
+                useAppLogo={false}
                 onClose={resumePlaybackSnackbar.close}
                 onMouseEnter={resumePlaybackSnackbar.onMouseEnter}
                 onMouseLeave={resumePlaybackSnackbar.onMouseLeave}

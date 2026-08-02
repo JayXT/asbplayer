@@ -25,7 +25,7 @@ describe('Alert', () => {
     const renderAlert = (message: string, open = true) => {
         act(() => {
             root.render(
-                <Alert open={open} autoHideDuration={3000} onClose={() => {}} severity="info">
+                <Alert useAppLogo={true} open={open} autoHideDuration={3000} onClose={() => {}} severity="info">
                     {message}
                 </Alert>
             );
