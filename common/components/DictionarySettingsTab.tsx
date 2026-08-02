@@ -14,6 +14,7 @@ import IconButton from '@mui/material/IconButton';
 import InputAdornment from '@mui/material/InputAdornment';
 import Link from '@mui/material/Link';
 import MenuItem from '@mui/material/MenuItem';
+import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import Radio from '@mui/material/Radio';
@@ -91,6 +92,7 @@ import {
 import WordBrowserDialog from './WordBrowserDialog';
 import '../app/components/subtitles.css';
 import SettingsGroups from './SettingsGroups';
+import Fade from '@mui/material/Fade';
 
 const yomitanInstallerUrl = 'https://github.com/yomidevs/yomitan-api';
 const yomitanMecabInstallerUrl = 'https://github.com/yomidevs/yomitan-mecab-installer';
@@ -1027,31 +1029,6 @@ const DictionarySettingsTab: React.FC<Props> = ({
                 onClose={() => setWordBrowserOpen(false)}
             />
             <Stack spacing={1}>
-                {(dictionaryYomitanUrlError || dictionaryYomitanMecabError || !extensionInstalled) && (
-                    <Alert severity="info">
-                        <Stack spacing={1}>
-                            {(dictionaryYomitanUrlError || dictionaryYomitanMecabError) && (
-                                <div>
-                                    <Trans
-                                        i18nKey="settings.annotationHelperText"
-                                        components={[
-                                            <Link
-                                                key={0}
-                                                onClick={handleYomitanHelperTextClicked}
-                                                sx={{ cursor: 'pointer' }}
-                                            />,
-                                        ]}
-                                    />
-                                </div>
-                            )}
-                            {!extensionInstalled && (
-                                <div>
-                                    <Trans i18nKey="settings.annotationNoExtensionWarn" />
-                                </div>
-                            )}
-                        </Stack>
-                    </Alert>
-                )}
                 <SettingsSection>{t('settings.manageWords')}</SettingsSection>
                 <Stack spacing={1}>
                     {supportsDictionaryBrowser && (
@@ -1172,6 +1149,31 @@ const DictionarySettingsTab: React.FC<Props> = ({
                         </MenuItem>
                     ))}
                 </SettingsTextField>
+                {(dictionaryYomitanUrlError || dictionaryYomitanMecabError || !extensionInstalled) && (
+                    <Alert severity="info">
+                        <Stack spacing={1}>
+                            {(dictionaryYomitanUrlError || dictionaryYomitanMecabError) && (
+                                <div>
+                                    <Trans
+                                        i18nKey="settings.annotationHelperText"
+                                        components={[
+                                            <Link
+                                                key={0}
+                                                onClick={handleYomitanHelperTextClicked}
+                                                sx={{ cursor: 'pointer' }}
+                                            />,
+                                        ]}
+                                    />
+                                </div>
+                            )}
+                            {!extensionInstalled && (
+                                <div>
+                                    <Trans i18nKey="settings.annotationNoExtensionWarn" />
+                                </div>
+                            )}
+                        </Stack>
+                    </Alert>
+                )}
                 <Box>
                     <Box
                         component="fieldset"
@@ -1182,16 +1184,30 @@ const DictionarySettingsTab: React.FC<Props> = ({
                             borderRadius: 1,
                         }}
                     >
-                        <Typography
-                            component="legend"
-                            variant="caption"
-                            sx={{
-                                px: 0.5,
-                                color: dictionaryAnnotationsEnabled ? 'primary.main' : 'text.secondary',
-                            }}
-                        >
-                            {t('settings.dictionaryEnableAnnotations')}
-                        </Typography>
+                        {dictionaryAnnotationsEnabled && (
+                            <Typography
+                                component="legend"
+                                variant="caption"
+                                sx={{
+                                    px: 0.5,
+                                    color: dictionaryAnnotationsEnabled ? 'primary.main' : 'text.secondary',
+                                }}
+                            >
+                                <Fade in>
+                                    <Box
+                                        sx={{
+                                            flexDirection: 'row',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 0.5,
+                                        }}
+                                    >
+                                        <PowerSettingsNewIcon sx={{ width: 16, height: 16 }} />
+                                        <div>{t('settings.dictionaryEnableAnnotations')}</div>
+                                    </Box>
+                                </Fade>
+                            </Typography>
+                        )}
                         <Stack spacing={1}>
                             <SwitchLabelWithHoverEffect
                                 control={
