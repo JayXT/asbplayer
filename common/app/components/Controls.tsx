@@ -1173,7 +1173,6 @@ export default function Controls({
                                         <Tooltip title={t('action.loadSubtitles')}>
                                             <IconButton
                                                 color="inherit"
-                                                className={classes.topButton}
                                                 onClick={onLoadSubtitles}
                                                 onMouseOver={handleMouseOver}
                                                 onMouseOut={handleMouseOut}
