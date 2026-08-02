@@ -89,6 +89,7 @@ interface Props {
     onSeek: (timestamp: number) => void;
     onToggleSubtitles: () => void;
     playModeSelectorRequest?: number;
+    flexDirection: React.CSSProperties['flexDirection'];
     onPlayModeSelectorOpened?: () => void;
     onPlayModeSelectorClosed?: () => void;
 }
@@ -109,6 +110,7 @@ const MobileVideoOverlay = React.forwardRef<HTMLDivElement, Props>(function Mobi
         onSeek,
         onToggleSubtitles,
         playModeSelectorRequest,
+        flexDirection,
         onPlayModeSelectorOpened,
         onPlayModeSelectorClosed,
     }: Props,
@@ -462,6 +464,7 @@ const MobileVideoOverlay = React.forwardRef<HTMLDivElement, Props>(function Mobi
                                     justifyContent: 'flex-start',
                                     padding: 0,
                                     overflowX: 'auto',
+                                    flexDirection: flexDirection ?? 'row',
                                 },
                                 className: classes.playModePopOver,
                                 anchorOrigin: {

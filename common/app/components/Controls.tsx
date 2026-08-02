@@ -1257,6 +1257,7 @@ export default function Controls({
                     selectedPlayModes={playModes || new Set()}
                     onClose={handlePlayModeSelectorClosed}
                     onPlayMode={handlePlayModeSelected}
+                    listStyle={{ flexDirection: 'column' }}
                 />
             </div>
         </React.Fragment>

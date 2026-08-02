@@ -2004,6 +2004,7 @@ export default function VideoPlayer({
                 anchor="bottom"
                 tooltipsEnabled={true}
                 initialControlType={lastControlType}
+                flexDirection="column"
                 onScrollToControlType={setLastControlType}
                 onMineSubtitle={() => inferAndExecuteMiningBehavior(settings.clickToMineDefaultAction)}
                 onOffset={handleOffsetChange}

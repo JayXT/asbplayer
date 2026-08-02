@@ -626,7 +626,13 @@ export default function SidePanel({ dictionaryProvider, settingsProvider, settin
 
     return (
         <div style={{ width: '100%', height: '100%' }} onMouseMove={handleMouseMove}>
-            <Alert open={alertOpen} onClose={handleAlertClosed} autoHideDuration={3000} severity={alertSeverity}>
+            <Alert
+                open={alertOpen}
+                useAppLogo={false}
+                onClose={handleAlertClosed}
+                autoHideDuration={3000}
+                severity={alertSeverity}
+            >
                 {alert}
             </Alert>
             {viewingAsbplayer && (appRequestedLocation === 'mining-history' || appRequestedLocation === undefined) && (

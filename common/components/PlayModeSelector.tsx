@@ -81,9 +81,9 @@ export default function PlayModeSelector({
                 disablePadding
                 dense
                 sx={{
+                    flexDirection: 'row',
                     ...listStyle,
                     display: 'flex',
-                    flexDirection: 'row',
                     flexWrap: 'nowrap',
                     width: 'max-content',
                     maxWidth: '100%',

@@ -257,6 +257,7 @@ const MobileVideoOverlayUi = () => {
                     anchor={anchor}
                     tooltipsEnabled={tooltipsEnabled}
                     initialControlType={lastControlType}
+                    flexDirection="row"
                     onScrollToControlType={setLastControlType}
                     onMineSubtitle={handleMineSubtitle}
                     onLoadSubtitles={handleLoadSubtitles}
