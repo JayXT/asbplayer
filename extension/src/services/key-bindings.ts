@@ -32,6 +32,7 @@ export default class KeyBindings {
     private _unbindResetOffset?: Unbinder = false;
     private _unbindAdjustPlaybackRate?: Unbinder = false;
     private _unbindToggleRepeat: Unbinder = false;
+    private _unbindTogglePrimedListening: Unbinder = false;
     private _unbindAdjustSubtitlePositionOffset: Unbinder = false;
     private _unbindAdjustTopSubtitlePositionOffset: Unbinder = false;
     private _unbindMarkHoveredToken?: Unbinder = false;
@@ -99,6 +100,16 @@ export default class KeyBindings {
                 event.preventDefault();
                 event.stopImmediatePropagation();
                 context.togglePlayMode(PlayMode.repeat);
+            },
+            () => context.subtitleController.subtitles.length === 0,
+            true
+        );
+
+        this._unbindTogglePrimedListening = this._keyBinder.bindTogglePrimedListening(
+            (event) => {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                context.togglePlayMode(PlayMode.primedListening);
             },
             () => context.subtitleController.subtitles.length === 0,
             true
@@ -447,6 +458,11 @@ export default class KeyBindings {
         if (this._unbindToggleRepeat) {
             this._unbindToggleRepeat();
             this._unbindToggleRepeat = false;
+        }
+
+        if (this._unbindTogglePrimedListening) {
+            this._unbindTogglePrimedListening();
+            this._unbindTogglePrimedListening = false;
         }
 
         if (this._unbindAdjustPlaybackRate) {

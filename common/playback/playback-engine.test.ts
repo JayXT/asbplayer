@@ -1746,4 +1746,52 @@ describe('PlaybackEngine', () => {
         expect(harness.seeks).toEqual([61_000]);
         expect(harness.plays).toHaveLength(1);
     });
+
+    it('reads, hides, and then resumes for primed listening', async () => {
+        jest.useFakeTimers();
+
+        try {
+            const harness = await makePlaybackEngine([PlayMode.primedListening], 500, [subtitle], {
+                settings: {
+                    primedListeningReadingTimePerCharacterMs: 100,
+                    primedListeningMinimumReadingTimeMs: 500,
+                    primedListeningMaximumReadingTimeMs: 2000,
+                    primedListeningResumeDelayMs: 300,
+                },
+            });
+
+            await harness.driver.time(1000, 1000);
+
+            expect(harness.pauses).toEqual([1000]);
+            expect(harness.playbackStates.at(-1)).toEqual({
+                timestampMs: 1000,
+                showingSubtitleIndexes: [0],
+                paused: true,
+            });
+
+            jest.advanceTimersByTime(subtitle.text.length * 100);
+
+            expect(harness.playbackStates.at(-1)).toEqual({
+                timestampMs: 1000,
+                showingSubtitleIndexes: [],
+                paused: true,
+            });
+            expect(harness.plays).toEqual([]);
+
+            jest.advanceTimersByTime(300);
+
+            expect(harness.plays).toEqual([1000]);
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it('keeps subtitles visible while primed listening is off', async () => {
+        const harness = await makePlaybackEngine([PlayMode.normal], 500, [subtitle]);
+
+        await harness.driver.time(1000, 1000);
+
+        expect(harness.pauses).toEqual([]);
+        expect(harness.playbackStates.at(-1)?.showingSubtitleIndexes).toEqual([0]);
+    });
 });

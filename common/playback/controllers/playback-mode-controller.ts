@@ -57,6 +57,8 @@ export const playbackModeNotifications = (
                 return enabled ? 'info.enabledFastForwardPlayback' : 'info.disabledFastForwardPlayback';
             case PlayMode.repeat:
                 return enabled ? 'info.enabledRepeatPlayback' : 'info.disabledRepeatPlayback';
+            case PlayMode.primedListening:
+                return enabled ? 'info.enabledPrimedListening' : 'info.disabledPrimedListening';
             default:
                 return 'info.disabledAllPlayModes';
         }

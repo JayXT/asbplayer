@@ -24,6 +24,7 @@ import PlaybackModeController, {
     type PlayModeTransition,
 } from '@project/common/playback/controllers/playback-mode-controller';
 import PlaybackPositionController from '@project/common/playback/controllers/playback-position-controller';
+import PlaybackPrimedListeningController from '@project/common/playback/controllers/playback-primed-listening-controller';
 import PlaybackStateController from '@project/common/playback/controllers/playback-state-controller';
 import type { TimingDriver } from '@project/common/playback/timing/timing-driver';
 import { CachedLocalStorage } from '@project/common/app/services/cached-local-storage';
@@ -106,6 +107,7 @@ export interface PlaybackEngineOptions<T extends IndexedSubtitleModel> {
  *     │   └── TimingUpdateQueue
  *     ├── PlaybackModeController
  *     ├── PlaybackPositionController
+ *     ├── PlaybackPrimedListeningController
  *     ├── PlaybackPlan
  *     └── PlaybackPlanExecutor
  *         ├── PlaybackTimeline
@@ -128,6 +130,7 @@ export default class PlaybackEngine<T extends IndexedSubtitleModel> {
     private readonly callbacks: PlaybackEngineCallbacks;
     private readonly timingDriver: TimingDriver;
     private readonly playbackPositionController: PlaybackPositionController<T>;
+    private readonly primedListeningController: PlaybackPrimedListeningController;
     private readonly playbackStateController: PlaybackStateController<T>;
     private readonly settingsProvider: SettingsProvider;
     private unbindOperationId = 0;
@@ -159,13 +162,24 @@ export default class PlaybackEngine<T extends IndexedSubtitleModel> {
         this.callbacks = callbacks;
         this.timingDriver = timingDriver;
         this.plan = this.buildPlan();
+        this.primedListeningController = new PlaybackPrimedListeningController({
+            play: callbacks.play,
+            showingSubtitlesChanged: () => {
+                if (!this.timingDriver.bound) return;
+                this.playbackStateController.notify(this.timingDriver.currentTimeMs(), { force: true });
+            },
+            onError: callbacks.onError,
+        });
+        this.primedListeningController.setPrimedListening(this.plan.primedListening);
 
         const executorCallbacks: PlaybackPlanExecutorCallbacks = {
             play: callbacks.play,
             paused: () => this.timingDriver.paused(),
             pause: () => {
                 callbacks.pause();
-                void this.playbackPositionController.savePlaybackPosition(this.timingDriver.currentTimeMs());
+                const timestampMs = this.timingDriver.currentTimeMs();
+                void this.playbackPositionController.savePlaybackPosition(timestampMs);
+                this.primedListeningController.paused(this.executor.showingSubtitlesAt(timestampMs));
             },
             seek: (targetTimestampMs) => this.seek(targetTimestampMs),
             setPlaybackRate: (playbackRate) => {
@@ -211,7 +225,8 @@ export default class PlaybackEngine<T extends IndexedSubtitleModel> {
         });
         this.playbackStateController = new PlaybackStateController({
             paused: () => this.timingDriver.paused(),
-            showingSubtitlesAt: (timestampMs) => this.executor.showingSubtitlesAt(timestampMs),
+            showingSubtitlesAt: (timestampMs) =>
+                this.primedListeningController.subtitlesSuppressed ? [] : this.executor.showingSubtitlesAt(timestampMs),
             playbackStateChanged: callbacks.playbackStateChanged,
             now: () => performance.now(),
         });
@@ -238,12 +253,14 @@ export default class PlaybackEngine<T extends IndexedSubtitleModel> {
                 );
             },
             onDiscontinuity: (currentTimestampMs) => {
+                this.primedListeningController.cancel();
                 this.playbackPositionController.discontinuity(currentTimestampMs);
                 this.executor.handleDiscontinuity(currentTimestampMs);
                 this.playbackStateController.notify(currentTimestampMs, { force: true });
             },
             onCancel: (options) => this.executor.cancelPendingOperations(options),
             onPlaybackStarted: async () => {
+                this.primedListeningController.cancel();
                 await this.executor.playbackStarted();
                 this.playbackStateController.notify(this.timingDriver.currentTimeMs(), { force: true });
             },
@@ -374,6 +391,7 @@ export default class PlaybackEngine<T extends IndexedSubtitleModel> {
 
     private teardown({ saveSettings }: { readonly saveSettings: boolean }): void {
         ++this.unbindOperationId;
+        this.primedListeningController.cancel();
         if (!saveSettings) this.playbackPositionController.profileChanged();
         if (!this.timingDriver.bound) return;
         this.playbackPositionController.unbind();
@@ -586,6 +604,10 @@ export default class PlaybackEngine<T extends IndexedSubtitleModel> {
             playbackRate: this.settings.playbackRate,
             fastForwardModePlaybackRate: this.settings.fastForwardModePlaybackRate,
             fastForwardPlaybackMinimumSkipIntervalMs: this.settings.fastForwardPlaybackMinimumSkipIntervalMs,
+            primedListeningReadingTimePerCharacterMs: this.settings.primedListeningReadingTimePerCharacterMs,
+            primedListeningMinimumReadingTimeMs: this.settings.primedListeningMinimumReadingTimeMs,
+            primedListeningMaximumReadingTimeMs: this.settings.primedListeningMaximumReadingTimeMs,
+            primedListeningResumeDelayMs: this.settings.primedListeningResumeDelayMs,
         });
     }
 
@@ -600,6 +622,7 @@ export default class PlaybackEngine<T extends IndexedSubtitleModel> {
         const planChanged = !playbackPlansEqual(this.plan, plan);
         if (planChanged) {
             this.plan = plan;
+            this.primedListeningController.setPrimedListening(this.plan.primedListening);
             this.executor.replacePlan(this.plan, this.timingDriver.currentTimeMs(), {
                 forcePlaybackRate: options.initializePlaybackRate,
             });

@@ -1344,6 +1344,13 @@ function PlayerComponent(
         );
     }, [keyBinder, disableKeyEvents, togglePlayMode]);
 
+    useEffect(() => {
+        return keyBinder.bindTogglePrimedListening(
+            (event) => togglePlayMode(event, PlayMode.primedListening),
+            () => disableKeyEvents
+        );
+    }, [keyBinder, disableKeyEvents, togglePlayMode]);
+
     useEffect(() => channel?.appBarToggle(appBarHidden), [channel, appBarHidden]);
     useEffect(() => channel?.fullscreenToggle(videoFullscreen), [channel, videoFullscreen]);
 
