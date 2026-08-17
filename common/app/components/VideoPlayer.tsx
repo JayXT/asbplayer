@@ -45,7 +45,9 @@ import {
 import { HoveredToken, renderRichTextOntoSubtitles, getAnnotationsHtml } from '@project/common/annotations';
 import Clock from '@project/common/playback/timing/clock';
 import {
-    playbackModeNotifications,
+    formatPlaybackModeNotifications,
+    PlaybackModeNotificationFormatOptions,
+    playbackModeNotificationJoin,
     type PlayModeTransition,
 } from '@project/common/playback/controllers/playback-mode-controller';
 import PlaybackEngine from '@project/common/playback/playback-engine';
@@ -483,6 +485,7 @@ export default function VideoPlayer({
                 open: true,
                 notifications: [
                     {
+                        key: options.notification.key,
                         message: {
                             locKey: options.notification.locKey,
                             replacements: options.notification.replacements,
@@ -512,15 +515,14 @@ export default function VideoPlayer({
     synchronizePlaybackModesRef.current = synchronizePlaybackModes;
 
     const handlePlaybackModesChanged = useCallback(
-        (
-            transition: PlayModeTransition,
-            modeNotifications = playbackModeNotifications(transition)
-        ): string | undefined => {
+        (transition: PlayModeTransition, options: PlaybackModeNotificationFormatOptions = {}): AlertNotification[] => {
             synchronizePlaybackModesRef.current(transition.modes);
-            if (!transition.added.size && !transition.removed.size) return;
-            const { notifications, join } = modeNotifications;
-            if (!notifications.length) return;
-            return notifications.map((notification) => t(notification)).join(join);
+            if (!transition.added.size && !transition.removed.size) return [];
+            return formatPlaybackModeNotifications(transition, t, options).map(({ key, text }) => ({
+                key,
+                message: text,
+                severity: 'info',
+            }));
         },
         [t]
     );
@@ -576,14 +578,14 @@ export default function VideoPlayer({
         [clock, playerChannel]
     );
 
-    const updateSubtitlesWithOffset = useCallback((offset: number, notifyPlayer: boolean) => {
+    const updateSubtitlesWithOffset = useCallback((offset: number, notifyPlayer: boolean, notificationKey: string) => {
         const previousOffset = offsetRef.current;
         offsetRef.current = offset;
         setOffset(offset);
         if (notifyPlayer) {
             setAlert({
                 open: true,
-                notifications: [{ message: formatAsSignedMs(offset), severity: 'info' }],
+                notifications: [{ key: notificationKey, message: formatAsSignedMs(offset), severity: 'info' }],
             });
         }
         if (offset === previousOffset) return;
@@ -664,7 +666,8 @@ export default function VideoPlayer({
                 setPlaybackRate: (playbackRate) => {
                     if (video.playbackRate !== playbackRate) video.playbackRate = playbackRate;
                 },
-                setSubtitleOffset: (offset, options) => updateSubtitlesWithOffset(offset, options.notifyPlayer),
+                setSubtitleOffset: (offset, options, notificationKey) =>
+                    updateSubtitlesWithOffset(offset, options.notifyPlayer, notificationKey),
                 playbackStateChanged: (state) => {
                     playbackStateChangedRef.current(state);
                     playerChannel.playbackState(state.timestampMs, state.showingSubtitleIndexes, state.paused);
@@ -672,8 +675,8 @@ export default function VideoPlayer({
                 playbackPositionChanged: setPendingPlaybackPosition,
                 saveSettings: (settings) => onSettingsChangedRef.current(settings),
                 playbackModesChanged: (transition) => {
-                    const message = handlePlaybackModesChanged(transition);
-                    if (message) setAlert({ open: true, notifications: [{ message, severity: 'info' }] });
+                    const notifications = handlePlaybackModesChanged(transition);
+                    if (notifications.length) setAlert({ open: true, notifications });
                 },
                 initialPlaybackSettingsChanged: (settings) => {
                     playerChannel.offset(settings.subtitleOffset);
@@ -685,25 +688,23 @@ export default function VideoPlayer({
                             ? notification.message
                             : t(notification.notification.locKey, notification.notification.replacements)
                     );
-                    const playbackMode = handlePlaybackModesChanged(
-                        settings.playbackModeTransition,
-                        settings.notifications.playbackMode
-                    );
+                    const playbackModeNotifications = handlePlaybackModesChanged(settings.playbackModeTransition, {
+                        includeTransition: false,
+                    });
                     const notifications: AlertNotification[] = [];
                     if (offsetAndRate.length) {
                         notifications.push({
-                            message: offsetAndRate.join(settings.notifications.playbackMode.join),
+                            message: offsetAndRate.join(playbackModeNotificationJoin),
                             severity: 'info',
                             autoHideDuration: settings.autoHideDuration,
                         });
                     }
-                    if (playbackMode) {
-                        notifications.push({
-                            message: playbackMode,
-                            severity: 'info',
+                    notifications.push(
+                        ...playbackModeNotifications.map((notification) => ({
+                            ...notification,
                             autoHideDuration: settings.autoHideDuration,
-                        });
-                    }
+                        }))
+                    );
                     if (notifications.length) setAlert({ open: true, notifications });
                 },
                 onError: (error) => onErrorRef.current?.(String(error)),
@@ -883,7 +884,10 @@ export default function VideoPlayer({
         });
         playerChannel.onPlaybackRate((playbackRate) => updatePlaybackRate(playbackRate, false));
         playerChannel.onAlert((message, severity) => {
-            setAlert({ open: true, notifications: [{ message, severity: severity as AlertNotification['severity'] }] });
+            setAlert({
+                open: true,
+                notifications: [{ message, severity: severity as AlertNotification['severity'] }],
+            });
         });
 
         window.onbeforeunload = () => {
