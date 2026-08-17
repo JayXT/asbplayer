@@ -145,6 +145,9 @@ export class MobileVideoOverlayController {
             }
 
             if (message.message.command === 'request-mobile-overlay-model') {
+                if (this._overlayInstanceId !== message.message.overlayInstanceId) {
+                    return;
+                }
                 void this._model().then(sendResponse);
                 this._uiInitialized = true;
                 return true;
