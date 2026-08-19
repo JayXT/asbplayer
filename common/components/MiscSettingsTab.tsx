@@ -1,3 +1,4 @@
+import { asbError } from '@project/common/util';
 import Button from '@mui/material/Button';
 import FormControl from '@mui/material/FormControl';
 import FormLabel from '@mui/material/FormLabel';
@@ -11,11 +12,11 @@ import FormGroup from '@mui/material/FormGroup';
 import Checkbox from '@mui/material/Checkbox';
 import Link from '@mui/material/Link';
 import Typography from '@mui/material/Typography';
-import SettingsTextField from './SettingsTextField';
-import SwitchLabelWithHoverEffect from './SwitchLabelWithHoverEffect';
-import LabelWithHoverEffect from './LabelWithHoverEffect';
+import SettingsTextField from '@project/common/components/SettingsTextField';
+import SwitchLabelWithHoverEffect from '@project/common/components/SwitchLabelWithHoverEffect';
+import LabelWithHoverEffect from '@project/common/components/LabelWithHoverEffect';
+import type { AsbplayerSettings } from '@project/common/settings';
 import {
-    AsbplayerSettings,
     autoPausePreferenceForCheckboxChange,
     exportSettings,
     isTrackAutoCopyable,
@@ -24,19 +25,19 @@ import {
     updateAutoCopyableTracksValue,
     updateSeekableTracksValue,
     validateSettings,
-} from '../settings';
+    VideoSubtitleSplitBehavior,
+} from '@project/common/settings';
 import { Trans, useTranslation } from 'react-i18next';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AutoPausePreference, SubtitleHtml } from '..';
-import { WebSocketClient } from '../web-socket-client';
+import { WebSocketClient } from '@project/common/web-socket-client';
 import InputAdornment from '@mui/material/InputAdornment';
 import IconButton from '@mui/material/IconButton';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import SettingsSection, { SettingsSubSection } from './SettingsSection';
-import ResponsiveSettingsStack from './ResponsiveSettingsStack';
-import { VideoSubtitleSplitBehavior } from '../settings';
-import { normalizePlaybackRate } from '../playback/controllers/playback-mode-controller';
-import NumericSettingInput from './NumericSettingInput';
+import SettingsSection, { SettingsSubSection } from '@project/common/components/SettingsSection';
+import ResponsiveSettingsStack from '@project/common/components/ResponsiveSettingsStack';
+import { normalizePlaybackRate } from '@project/common/playback/controllers/playback-mode-controller';
+import NumericSettingInput from '@project/common/components/NumericSettingInput';
 
 function regexIsValid(regex: string) {
     try {
@@ -128,7 +129,7 @@ const MiscSettingTab: React.FC<Props> = ({
             .then(() => client.ping())
             .then(() => setWebSocketConnectionSucceeded(true))
             .catch((e) => {
-                console.error(e);
+                asbError('settings/web-socket', e);
                 setWebSocketConnectionSucceeded(false);
             })
             .finally(() => client.unbind());
@@ -162,7 +163,7 @@ const MiscSettingTab: React.FC<Props> = ({
             const validatedSettings = validateSettings(importedSettings);
             onSettingsChanged(validatedSettings);
         } catch (e) {
-            console.error(e);
+            asbError('settings/import', e);
         }
     }, [onSettingsChanged]);
 
