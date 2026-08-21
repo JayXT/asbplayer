@@ -47,6 +47,8 @@ const playbackModeTransitionLocKey = (mode: PlayMode, enabled: boolean): string 
             return enabled ? 'info.enabledFastForwardPlayback' : 'info.disabledFastForwardPlayback';
         case PlayMode.repeat:
             return enabled ? 'info.enabledRepeatPlayback' : 'info.disabledRepeatPlayback';
+        case PlayMode.primedListening:
+            return enabled ? 'info.enabledPrimedListening' : 'info.disabledPrimedListening';
         default:
             return;
     }
@@ -64,6 +66,8 @@ export const playbackModeLabelLocKey = (mode: PlayMode): string => {
             return 'controls.fastForwardMode';
         case PlayMode.repeat:
             return 'controls.repeatMode';
+        case PlayMode.primedListening:
+            return 'controls.primedListeningMode';
     }
 };
 
@@ -72,6 +76,7 @@ const playbackModesForSummary: readonly PlayMode[] = [
     PlayMode.fastForward,
     PlayMode.autoPause,
     PlayMode.repeat,
+    PlayMode.primedListening,
 ];
 
 type Localizer = (locKey: string) => string;
@@ -136,42 +141,6 @@ const modeChanges = (
     added: new Set([...newModes].filter((mode) => !oldModes.has(mode))),
     removed: new Set([...oldModes].filter((mode) => !newModes.has(mode))),
 });
-
-export const playbackModeNotifications = (
-    transition: PlayModeTransition
-): { notifications: string[]; join: string } => {
-    const getLocKey = (mode: PlayMode, enabled: boolean): string => {
-        switch (mode) {
-            case PlayMode.autoPause:
-                return enabled ? 'info.enabledAutoPause' : 'info.disabledAutoPause';
-            case PlayMode.condensed:
-                return enabled ? 'info.enabledCondensedPlayback' : 'info.disabledCondensedPlayback';
-            case PlayMode.fastForward:
-                return enabled ? 'info.enabledFastForwardPlayback' : 'info.disabledFastForwardPlayback';
-            case PlayMode.repeat:
-                return enabled ? 'info.enabledRepeatPlayback' : 'info.disabledRepeatPlayback';
-            case PlayMode.primedListening:
-                return enabled ? 'info.enabledPrimedListening' : 'info.disabledPrimedListening';
-            default:
-                return 'info.disabledAllPlayModes';
-        }
-    };
-
-    const notifications: string[] = [];
-    for (const mode of transition.removed) {
-        if (mode === PlayMode.normal) continue;
-        notifications.push(getLocKey(mode, false));
-    }
-    for (const mode of transition.added) {
-        if (mode === PlayMode.normal) {
-            notifications.length = 0;
-            notifications.push(getLocKey(PlayMode.normal, true));
-            break;
-        }
-        notifications.push(getLocKey(mode, true));
-    }
-    return { notifications, join: ' | ' };
-};
 
 /** Coordinates playback-mode selection. */
 export default class PlaybackModeController {

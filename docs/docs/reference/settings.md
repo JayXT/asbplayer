@@ -185,48 +185,6 @@ Keyboard shortcuts can be used to access most of asbplayer's features.
 | Export card to Anki, bypassing dialog.                                               |         ✓         |          ✓          |
 | Manually take screenshot, overriding the one that is automatically taken when mining |         ✓         |          ✓          |
 | Manually start/stop audio recording, even when a subtitle file is loaded.            |         ✓         |          ✓          |
-| Select subtitle tracks to load.                                                      |                   |          ✓          |
-| Toggle side panel                                                                    |         ✓         |          ✓          |
-| Play/pause                                                                           |         ✓         |          ✓          |
-| Toggle auto-pause                                                                    |         ✓         |          ✓          |
-| Toggle condensed playback                                                            |         ✓         |          ✓          |
-| Toggle fast forward playback                                                         |         ✓         |          ✓          |
-| Toggle repeat mode                                                                   |         ✓         |          ✓          |
-| Toggle primed listening mode                                                         |         ✓         |          ✓          |
-| Toggle subtitles                                                                     |         ✓         |          ✓          |
-| Toggle subtitle track 1 in video                                                     |         ✓         |          ✓          |
-| Toggle subtitle track 2 in video                                                     |         ✓         |          ✓          |
-| Toggle subtitle track 3 in video                                                     |         ✓         |          ✓          |
-| Toggle subtitle track 1 in asbplayer                                                 |         ✓         |          ✓          |
-| Toggle subtitle track 2 in asbplayer                                                 |         ✓         |          ✓          |
-| Toggle subtitle track 3 in asbplayer                                                 |         ✓         |          ✓          |
-| Unblur subtitle track 1 in asbplayer                                                 |         ✓         |          ✓          |
-| Unblur subtitle track 2 in asbplayer                                                 |         ✓         |          ✓          |
-| Unblur subtitle track 3 in asbplayer                                                 |         ✓         |          ✓          |
-| Seek backward 10 seconds                                                             |         ✓         |          ✓          |
-| Seek forward 10 seconds                                                              |         ✓         |          ✓          |
-| Seek to previous subtitle                                                            |         ✓         |          ✓          |
-| Seek to next subtitle                                                                |         ✓         |          ✓          |
-| Seek to beginning of current/previous subtitle                                       |         ✓         |          ✓          |
-| Adjust subtitle offset so that previous subtitle is at current timestamp             |         ✓         |          ✓          |
-| Adjust subtitle offset so that next subtitle is at current timestamp                 |         ✓         |          ✓          |
-| Adjust subtitle offset by +100ms                                                     |         ✓         |          ✓          |
-| Adjust subtitle offset by -100ms                                                     |         ✓         |          ✓          |
-| Reset subtitle offset                                                                |         ✓         |          ✓          |
-| Increase playback rate                                                               |         ✓         |          ✓          |
-| Decrease playback rate                                                               |         ✓         |          ✓          |
-| Move bottom subtitles up                                                             |         ✓         |          ✓          |
-| Move bottom subtitles down                                                           |         ✓         |          ✓          |
-| Move top subtitles up                                                                |         ✓         |          ✓          |
-| Move top subtitles down                                                              |         ✓         |          ✓          |
-| Mark hovered word as Mature                                                          |         ✓         |          ✓          |
-| Mark hovered word as Young                                                           |         ✓         |          ✓          |
-| Mark hovered word as Graduated                                                       |         ✓         |          ✓          |
-| Mark hovered word as Learning                                                        |         ✓         |          ✓          |
-| Mark hovered word as Unknown                                                         |         ✓         |          ✓          |
-| Mark hovered word as Uncollected                                                     |         ✓         |          ✓          |
-| Toggle hovered word as ignored                                                       |         ✓         |          ✓          |
-| Open statistics                                                                      |         ✓         |          ✓          |
 
 ### [Playback](https://app.asbplayer.dev/?view=settings#misc-settings) keyboard shortcuts
 
@@ -238,6 +196,7 @@ Keyboard shortcuts can be used to access most of asbplayer's features.
 | Toggle condensed playback    |         ✓         |          ✓          |
 | Toggle fast forward playback |         ✓         |          ✓          |
 | Toggle repeat mode           |         ✓         |          ✓          |
+| Toggle primed listening mode |         ✓         |          ✓          |
 
 ### [Seek](https://app.asbplayer.dev/?view=settings#misc-settings) keyboard shortcuts
 
