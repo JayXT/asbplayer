@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { AutoPausePreference, PlayMode, type IndexedSubtitleModel } from '@project/common';
-import Binding, { type BindingOptions } from './binding';
-import { MockStorageArea } from './mock-storage-area';
+import { AutoPausePreference, PlayMode } from '@project/common';
+import type { IndexedSubtitleModel } from '@project/common';
+import Binding from '@project/extension/src/services/binding';
+import type { BindingOptions } from '@project/extension/src/services/binding';
+import { MockStorageArea } from '@project/extension/src/services/mock-storage-area';
 
 const bindingOptions = (hasPageScript: boolean, videoSrcChangesIndicateNewVideo: boolean): BindingOptions => ({
     hasPageScript,
@@ -11,39 +13,42 @@ const bindingOptions = (hasPageScript: boolean, videoSrcChangesIndicateNewVideo:
 jest.mock('@project/common/subtitle-reader', () => ({
     SubtitleReader: class SubtitleReader {},
 }));
-jest.mock('./localization-fetcher', () => ({
+jest.mock('@project/extension/src/services/localization-fetcher', () => ({
     fetchLocalization: jest.fn(async () => ({})),
 }));
-jest.mock('./i18n', () => ({
+jest.mock('@project/extension/src/services/i18n', () => ({
     i18nInit: jest.fn(async () => undefined),
 }));
-jest.mock('./build-flags', () => ({
+jest.mock('i18next', () => ({
+    t: (key: string) => key,
+}));
+jest.mock('@project/extension/src/services/build-flags', () => ({
     isFirefoxBuild: false,
 }));
-jest.mock('../controllers/anki-ui-controller', () => ({
+jest.mock('@project/extension/src/controllers/anki-ui-controller', () => ({
     __esModule: true,
     default: class AnkiUiController {
         updateSettings() {}
     },
 }));
-jest.mock('../controllers/controls-controller', () => ({
+jest.mock('@project/extension/src/controllers/controls-controller', () => ({
     __esModule: true,
     default: class ControlsController {},
 }));
-jest.mock('../controllers/drag-controller', () => ({
+jest.mock('@project/extension/src/controllers/drag-controller', () => ({
     __esModule: true,
     default: class DragController {
         bind() {}
         unbind() {}
     },
 }));
-jest.mock('../controllers/mobile-gesture-controller', () => ({
+jest.mock('@project/extension/src/controllers/mobile-gesture-controller', () => ({
     MobileGestureController: class MobileGestureController {
         bind() {}
         unbind() {}
     },
 }));
-jest.mock('../controllers/mobile-video-overlay-controller', () => ({
+jest.mock('@project/extension/src/controllers/mobile-video-overlay-controller', () => ({
     MobileVideoOverlayController: class MobileVideoOverlayController {
         bind() {}
         unbind() {}
@@ -53,20 +58,20 @@ jest.mock('../controllers/mobile-video-overlay-controller', () => ({
         async updateModel() {}
     },
 }));
-jest.mock('../controllers/notification-controller', () => ({
+jest.mock('@project/extension/src/controllers/notification-controller', () => ({
     __esModule: true,
     default: class NotificationController {
         unbind() {}
     },
 }));
-jest.mock('../controllers/bulk-export-controller', () => ({
+jest.mock('@project/extension/src/controllers/bulk-export-controller', () => ({
     __esModule: true,
     default: class BulkExportController {
         bind() {}
         unbind() {}
     },
 }));
-jest.mock('../controllers/video-data-sync-controller', () => ({
+jest.mock('@project/extension/src/controllers/video-data-sync-controller', () => ({
     __esModule: true,
     default: class VideoDataSyncController {
         pickerVisible = false;
@@ -76,7 +81,7 @@ jest.mock('../controllers/video-data-sync-controller', () => ({
         unbind() {}
     },
 }));
-jest.mock('./key-bindings', () => ({
+jest.mock('@project/extension/src/services/key-bindings', () => ({
     __esModule: true,
     default: class KeyBindings {
         setKeyBindSet() {}
@@ -261,6 +266,29 @@ describe('Binding playback mode integration', () => {
         await flushPlaybackTiming();
 
         expect(binding.subtitleController.currentSubtitle()[0]?.text).toBe('subtitle');
+        binding.unbind();
+    });
+
+    it('shows active playback modes above the transition notification', async () => {
+        const video = createVideo();
+        const binding = new Binding(video, bindingOptions(false, false));
+        binding.bind();
+        await jest.advanceTimersByTimeAsync(0);
+        sendSubtitles(binding, [makeSubtitle()]);
+        const notification = jest.spyOn(binding.subtitleController, 'notification').mockImplementation(() => {});
+
+        binding.togglePlayMode(PlayMode.fastForward);
+
+        expect(notification).toHaveBeenCalledWith({
+            text: 'settings.playbackModes:\ncontrols.fastForwardMode\ninfo.enabledFastForwardPlayback',
+        });
+
+        notification.mockClear();
+        binding.togglePlayMode(PlayMode.normal);
+
+        expect(notification).toHaveBeenCalledWith({
+            text: 'settings.playbackModes:\ncontrols.normalMode\ninfo.disabledFastForwardPlayback',
+        });
         binding.unbind();
     });
 
@@ -762,6 +790,44 @@ describe('Binding playback mode integration', () => {
         binding.unbind();
     });
 
+    it('shows only the playback mode summary when loading remembered modes', async () => {
+        await storage.set({ rememberPlaybackModes: true, lastPlaybackModes: [PlayMode.fastForward] });
+        const binding = new Binding(createVideo(), bindingOptions(false, false));
+        binding.bind();
+        await jest.advanceTimersByTimeAsync(0);
+        const notification = jest.spyOn(binding.subtitleController, 'notification').mockImplementation(() => {});
+
+        sendSubtitles(binding, [makeSubtitle()]);
+
+        expect(notification).toHaveBeenCalledWith({
+            text: 'settings.playbackModes:\ncontrols.fastForwardMode',
+            autoHideDuration: 6000,
+        });
+        binding.unbind();
+    });
+
+    it('separates initial playback mode summary from offset and rate notifications', async () => {
+        await storage.set({
+            rememberPlaybackModes: true,
+            lastPlaybackModes: [PlayMode.fastForward],
+            lastSubtitleOffset: 375,
+            playbackRate: 1.4,
+        });
+        const binding = new Binding(createVideo(), bindingOptions(false, false));
+        binding.bind();
+        await jest.advanceTimersByTimeAsync(0);
+        const notification = jest.spyOn(binding.subtitleController, 'notification').mockImplementation(() => {});
+
+        sendSubtitles(binding, [makeSubtitle()]);
+
+        expect(notification).toHaveBeenCalledTimes(1);
+        expect(notification.mock.calls[0][0]).toMatchObject({ autoHideDuration: 6000 });
+        expect(notification.mock.calls[0][0].text).toMatch(
+            /^\+375 ms \| .* \| settings\.playbackModes:\ncontrols\.fastForwardMode$/
+        );
+        binding.unbind();
+    });
+
     it('shows remembered offset and playback rate notifications on the first subtitle load', async () => {
         await storage.set({ lastSubtitleOffset: 375, playbackRate: 1.4 });
         const binding = new Binding(createVideo(), bindingOptions(false, false));
@@ -895,10 +961,12 @@ describe('Binding playback mode integration', () => {
         video.dispatchEvent(new Event('ratechange'));
 
         expect(notification).toHaveBeenCalledTimes(1);
-        expect(notification).toHaveBeenCalledWith({
-            locKey: 'info.playbackRate',
-            replacements: { rate: '1.05' },
-        });
+        expect(notification).toHaveBeenCalledWith(
+            expect.objectContaining({
+                locKey: 'info.playbackRate',
+                replacements: { rate: '1.05' },
+            })
+        );
         binding.unbind();
     });
 
@@ -919,10 +987,12 @@ describe('Binding playback mode integration', () => {
         await flushPlaybackTiming();
         binding.adjustPlaybackRate(0.1);
 
-        expect(notification).toHaveBeenCalledWith({
-            locKey: 'info.fastForwardPlaybackRate',
-            replacements: { rate: '2.8' },
-        });
+        expect(notification).toHaveBeenCalledWith(
+            expect.objectContaining({
+                locKey: 'info.fastForwardPlaybackRate',
+                replacements: { rate: '2.8' },
+            })
+        );
         binding.unbind();
     });
 

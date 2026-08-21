@@ -1,12 +1,12 @@
-import {
+import type {
     AnkiExportMode,
-    AutoPausePreference,
     PlayMode,
     PostMineAction,
     PostMinePlayback,
     SubtitleHtml,
-} from '../src/model';
-import { arrayEquals } from '../util';
+} from '@project/common/src/model';
+import { AutoPausePreference } from '@project/common/src/model';
+import { arrayEquals } from '@project/common/util';
 
 export const activeProfileKey = 'activeSettingsProfile';
 export const profilesKey = 'settingsProfiles';
@@ -1006,7 +1006,7 @@ export interface PageSettings {
     yleAreena: Page;
     hboMax: Page;
     stremio: Page;
-    nijapanese: Page;
+    cijapanese: Page;
     iwanttfc: Page;
     svtplay: Page;
     urplay: Page;

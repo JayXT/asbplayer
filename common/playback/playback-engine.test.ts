@@ -1,15 +1,10 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { AutoPausePreference, type IndexedSubtitleModel, type PlaybackState, PlayMode } from '@project/common';
-import {
-    defaultSettings,
-    isSaveOnlySettings,
-    type AsbplayerSettings,
-    type SettingsProvider,
-} from '@project/common/settings';
-import PlaybackEngine, {
-    formatPlaybackRateNotification,
-    type InitialPlaybackSettings,
-} from '@project/common/playback/playback-engine';
+import { AutoPausePreference, PlayMode } from '@project/common';
+import type { IndexedSubtitleModel, PlaybackState } from '@project/common';
+import { defaultSettings, isSaveOnlySettings } from '@project/common/settings';
+import type { AsbplayerSettings, SettingsProvider } from '@project/common/settings';
+import PlaybackEngine, { formatPlaybackRateNotification } from '@project/common/playback/playback-engine';
+import type { InitialPlaybackSettings } from '@project/common/playback/playback-engine';
 import type {
     InternalSeekCompletion,
     TimingDriver,
@@ -186,7 +181,8 @@ async function makePlaybackEngine(
     const playbackRates: number[] = [];
     const playbackStates: PlaybackState[] = [];
     const subtitleOffsets: number[] = [];
-    const subtitleOffsetOptions: { readonly offset: number; readonly notifyPlayer: boolean }[] = [];
+    const subtitleOffsetOptions: { readonly offset: number; readonly notifyPlayer: boolean; readonly key: string }[] =
+        [];
     const initialPlaybackSettings: InitialPlaybackSettings[] = [];
     const playbackPositionChanges: (number | undefined)[] = [];
     const modeChanges: {
@@ -255,9 +251,9 @@ async function makePlaybackEngine(
                 playbackRates.push(playbackRate);
                 driver.playbackRateValue = playbackRate;
             },
-            setSubtitleOffset: (offset, options) => {
+            setSubtitleOffset: (offset, options, key) => {
                 subtitleOffsets.push(offset);
-                subtitleOffsetOptions.push({ offset, notifyPlayer: options.notifyPlayer });
+                subtitleOffsetOptions.push({ offset, notifyPlayer: options.notifyPlayer, key });
             },
             playbackStateChanged: (state) => {
                 playbackStates.push(state);
@@ -371,7 +367,7 @@ describe('PlaybackEngine', () => {
 
         expect(harness.playbackRates).toEqual([1.4]);
         expect(harness.subtitleOffsets).toEqual([375]);
-        expect(harness.subtitleOffsetOptions).toEqual([{ offset: 375, notifyPlayer: false }]);
+        expect(harness.subtitleOffsetOptions).toEqual([{ offset: 375, notifyPlayer: false, key: 'subtitle-offset' }]);
         expect(harness.initialPlaybackSettings).toEqual([
             {
                 autoHideDuration: 6000,
@@ -387,10 +383,13 @@ describe('PlaybackEngine', () => {
                         { type: 'message', message: '+375 ms' },
                         {
                             type: 'translation',
-                            notification: { locKey: 'info.playbackRate', replacements: { rate: '1.4' } },
+                            notification: {
+                                key: 'playback-rate',
+                                locKey: 'info.playbackRate',
+                                replacements: { rate: '1.4' },
+                            },
                         },
                     ],
-                    playbackMode: { notifications: [], join: ' | ' },
                 },
             },
         ]);
@@ -431,6 +430,7 @@ describe('PlaybackEngine', () => {
                     {
                         type: 'translation',
                         notification: {
+                            key: 'playback-rate',
                             locKey: 'info.fastForwardPlaybackRate',
                             replacements: { rate: '2.7' },
                         },
@@ -443,14 +443,17 @@ describe('PlaybackEngine', () => {
 
     it('formats playback rate notifications without trailing zeros', () => {
         expect(formatPlaybackRateNotification(1, 'info.playbackRate')).toEqual({
+            key: 'playback-rate',
             locKey: 'info.playbackRate',
             replacements: { rate: '1' },
         });
         expect(formatPlaybackRateNotification(1.1, 'info.playbackRate')).toEqual({
+            key: 'playback-rate',
             locKey: 'info.playbackRate',
             replacements: { rate: '1.1' },
         });
         expect(formatPlaybackRateNotification(1.05, 'info.playbackRate')).toEqual({
+            key: 'playback-rate',
             locKey: 'info.playbackRate',
             replacements: { rate: '1.05' },
         });
@@ -1194,7 +1197,8 @@ describe('PlaybackEngine', () => {
 
             expect(harness.driver.cancelExpectedInternalSeekCalls).toBe(1);
             expect(warning).toHaveBeenCalledWith(
-                '[asbplayer/playback] Internal seek did not complete before the watchdog timeout',
+                '[asbplayer][playback/seek]',
+                'Internal seek did not complete before the watchdog timeout',
                 expect.objectContaining({ targetTimestampMs: 1000, timeoutMs: 10_000 })
             );
         } finally {

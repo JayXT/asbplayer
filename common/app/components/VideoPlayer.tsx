@@ -1,33 +1,34 @@
-import React, { MutableRefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { MutableRefObject } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isMobile } from 'react-device-detect';
 import { makeStyles } from '@mui/styles';
-import { useWindowSize } from '../hooks/use-window-size';
-import {
+import { useWindowSize } from '@project/common/app/hooks/use-window-size';
+import type {
     SubtitleModel,
     AudioTrackModel,
-    PostMineAction,
-    PlayMode,
     OffscreenDomCache,
     CardTextFieldValues,
-    PostMinePlayback,
     ControlType,
     IndexedSubtitleModel,
     PlaybackState,
 } from '@project/common';
-import {
+import { PostMineAction, PlayMode, PostMinePlayback } from '@project/common';
+import type {
     MiscSettings,
     SubtitleSettings,
     AnkiSettings,
     AsbplayerSettings,
     SubtitleAlignment,
+    DictionaryTrack,
+    SettingsProvider,
+} from '@project/common/settings';
+import {
     changeForTextSubtitleSetting,
     textSubtitleSettingsForTrack,
     PauseOnHoverMode,
     allTextSubtitleSettings,
     TokenState,
     ApplyStrategy,
-    DictionaryTrack,
-    SettingsProvider,
 } from '@project/common/settings';
 import {
     arrayEquals,
@@ -45,33 +46,41 @@ import {
 import { HoveredToken, renderRichTextOntoSubtitles, getAnnotationsHtml } from '@project/common/annotations';
 import Clock from '@project/common/playback/timing/clock';
 import {
-    playbackModeNotifications,
-    type PlayModeTransition,
+    formatPlaybackModeNotifications,
+    playbackModeNotificationJoin,
+} from '@project/common/playback/controllers/playback-mode-controller';
+import type {
+    PlaybackModeNotificationFormatOptions,
+    PlayModeTransition,
 } from '@project/common/playback/controllers/playback-mode-controller';
 import PlaybackEngine from '@project/common/playback/playback-engine';
 import VideoFrameTimingDriver from '@project/common/playback/timing/video-frame-timing-driver';
-import Controls, { Point } from './Controls';
-import PlayerChannel from '../services/player-channel';
-import ChromeExtension from '../services/chrome-extension';
-import Alert, { type AlertNotification } from './Alert';
+import type { Point } from '@project/common/app/components/Controls';
+import Controls from '@project/common/app/components/Controls';
+import PlayerChannel from '@project/common/app/services/player-channel';
+import type ChromeExtension from '@project/common/app/services/chrome-extension';
+import Alert from '@project/common/app/components/Alert';
+import type { AlertNotification } from '@project/common/app/components/Alert';
 import Button from '@mui/material/Button';
-import { useSubtitleDomCache } from '../hooks/use-subtitle-dom-cache';
-import { useAppKeyBinder } from '../hooks/use-app-key-binder';
-import { Direction, useSwipe } from '../hooks/use-swipe';
-import './subtitles.css';
+import { useSubtitleDomCache } from '@project/common/app/hooks/use-subtitle-dom-cache';
+import { useAppKeyBinder } from '@project/common/app/hooks/use-app-key-binder';
+import type { Direction } from '@project/common/app/hooks/use-swipe';
+import { useSwipe } from '@project/common/app/hooks/use-swipe';
+import '@project/common/app/components/subtitles.css';
 import i18n from 'i18next';
+import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
-import { adjacentSubtitle } from '../../key-binder';
-import { usePlaybackPreferences } from '../hooks/use-playback-preferences';
-import { MiningContext } from '../services/mining-context';
-import useSnackbar from '../../hooks/use-snackbar';
-import { useStableDictionaryTracks, useSubtitleStyles } from '../hooks/use-subtitle-styles';
-import { useFullscreen } from '../hooks/use-fullscreen';
+import { adjacentSubtitle } from '@project/common/key-binder';
+import { usePlaybackPreferences } from '@project/common/app/hooks/use-playback-preferences';
+import type { MiningContext } from '@project/common/app/services/mining-context';
+import useSnackbar from '@project/common/hooks/use-snackbar';
+import { useStableDictionaryTracks, useSubtitleStyles } from '@project/common/app/hooks/use-subtitle-styles';
+import { useFullscreen } from '@project/common/app/hooks/use-fullscreen';
 import MobileVideoOverlay from '@project/common/components/MobileVideoOverlay';
-import BlurOverlay from './BlurOverlay';
-import { CachedLocalStorage } from '../services/cached-local-storage';
-import useLastScrollableControlType from '../../hooks/use-last-scrollable-control-type';
-import { type Theme } from '@mui/material/styles';
+import BlurOverlay from '@project/common/app/components/BlurOverlay';
+import { CachedLocalStorage } from '@project/common/app/services/cached-local-storage';
+import useLastScrollableControlType from '@project/common/hooks/use-last-scrollable-control-type';
+import type { Theme } from '@mui/material/styles';
 
 const overlayContainerHeight = 48;
 interface ExperimentalHTMLVideoElement extends HTMLVideoElement {
@@ -483,6 +492,7 @@ export default function VideoPlayer({
                 open: true,
                 notifications: [
                     {
+                        key: options.notification.key,
                         message: {
                             locKey: options.notification.locKey,
                             replacements: options.notification.replacements,
@@ -512,17 +522,16 @@ export default function VideoPlayer({
     synchronizePlaybackModesRef.current = synchronizePlaybackModes;
 
     const handlePlaybackModesChanged = useCallback(
-        (
-            transition: PlayModeTransition,
-            modeNotifications = playbackModeNotifications(transition)
-        ): string | undefined => {
+        (transition: PlayModeTransition, options: PlaybackModeNotificationFormatOptions = {}): AlertNotification[] => {
             synchronizePlaybackModesRef.current(transition.modes);
-            if (!transition.added.size && !transition.removed.size) return;
-            const { notifications, join } = modeNotifications;
-            if (!notifications.length) return;
-            return notifications.map((notification) => t(notification)).join(join);
+            if (!transition.added.size && !transition.removed.size) return [];
+            return formatPlaybackModeNotifications(transition, options).map(({ key, text }) => ({
+                key,
+                message: text,
+                severity: 'info',
+            }));
         },
-        [t]
+        []
     );
 
     const handlePlaybackRateChanged = useCallback(
@@ -576,14 +585,14 @@ export default function VideoPlayer({
         [clock, playerChannel]
     );
 
-    const updateSubtitlesWithOffset = useCallback((offset: number, notifyPlayer: boolean) => {
+    const updateSubtitlesWithOffset = useCallback((offset: number, notifyPlayer: boolean, notificationKey: string) => {
         const previousOffset = offsetRef.current;
         offsetRef.current = offset;
         setOffset(offset);
         if (notifyPlayer) {
             setAlert({
                 open: true,
-                notifications: [{ message: formatAsSignedMs(offset), severity: 'info' }],
+                notifications: [{ key: notificationKey, message: formatAsSignedMs(offset), severity: 'info' }],
             });
         }
         if (offset === previousOffset) return;
@@ -664,7 +673,8 @@ export default function VideoPlayer({
                 setPlaybackRate: (playbackRate) => {
                     if (video.playbackRate !== playbackRate) video.playbackRate = playbackRate;
                 },
-                setSubtitleOffset: (offset, options) => updateSubtitlesWithOffset(offset, options.notifyPlayer),
+                setSubtitleOffset: (offset, options, notificationKey) =>
+                    updateSubtitlesWithOffset(offset, options.notifyPlayer, notificationKey),
                 playbackStateChanged: (state) => {
                     playbackStateChangedRef.current(state);
                     playerChannel.playbackState(state.timestampMs, state.showingSubtitleIndexes, state.paused);
@@ -672,38 +682,39 @@ export default function VideoPlayer({
                 playbackPositionChanged: setPendingPlaybackPosition,
                 saveSettings: (settings) => onSettingsChangedRef.current(settings),
                 playbackModesChanged: (transition) => {
-                    const message = handlePlaybackModesChanged(transition);
-                    if (message) setAlert({ open: true, notifications: [{ message, severity: 'info' }] });
+                    const notifications = handlePlaybackModesChanged(transition);
+                    if (notifications.length) setAlert({ open: true, notifications });
                 },
                 initialPlaybackSettingsChanged: (settings) => {
                     playerChannel.offset(settings.subtitleOffset);
                     clock.rate = settings.playbackRate;
                     playerChannel.playbackRate(settings.playbackRate, false);
 
-                    const offsetAndRate = settings.notifications.offsetAndRate.map((notification) =>
-                        notification.type === 'message'
-                            ? notification.message
-                            : t(notification.notification.locKey, notification.notification.replacements)
-                    );
-                    const playbackMode = handlePlaybackModesChanged(
-                        settings.playbackModeTransition,
-                        settings.notifications.playbackMode
-                    );
+                    const offsetAndRate = (_t: TFunction) =>
+                        settings.notifications.offsetAndRate
+                            .map((notification) =>
+                                notification.type === 'message'
+                                    ? notification.message
+                                    : _t(notification.notification.locKey, notification.notification.replacements)
+                            )
+                            .join(playbackModeNotificationJoin);
+                    const playbackModeNotifications = handlePlaybackModesChanged(settings.playbackModeTransition, {
+                        includeTransition: false,
+                    });
                     const notifications: AlertNotification[] = [];
                     if (offsetAndRate.length) {
                         notifications.push({
-                            message: offsetAndRate.join(settings.notifications.playbackMode.join),
+                            message: offsetAndRate,
                             severity: 'info',
                             autoHideDuration: settings.autoHideDuration,
                         });
                     }
-                    if (playbackMode) {
-                        notifications.push({
-                            message: playbackMode,
-                            severity: 'info',
+                    notifications.push(
+                        ...playbackModeNotifications.map((notification) => ({
+                            ...notification,
                             autoHideDuration: settings.autoHideDuration,
-                        });
-                    }
+                        }))
+                    );
                     if (notifications.length) setAlert({ open: true, notifications });
                 },
                 onError: (error) => onErrorRef.current?.(String(error)),
@@ -727,7 +738,6 @@ export default function VideoPlayer({
         handlePlaybackModesChanged,
         playerChannel,
         settingsProvider,
-        t,
         updatePlayerState,
         updateSubtitlesWithOffset,
         video,
@@ -883,7 +893,10 @@ export default function VideoPlayer({
         });
         playerChannel.onPlaybackRate((playbackRate) => updatePlaybackRate(playbackRate, false));
         playerChannel.onAlert((message, severity) => {
-            setAlert({ open: true, notifications: [{ message, severity: severity as AlertNotification['severity'] }] });
+            setAlert({
+                open: true,
+                notifications: [{ message, severity: severity as AlertNotification['severity'] }],
+            });
         });
 
         window.onbeforeunload = () => {

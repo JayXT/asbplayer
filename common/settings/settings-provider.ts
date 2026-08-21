@@ -1,18 +1,20 @@
-import {
+import type {
     AnkiField,
     AnkiFieldSettings,
     AnkiSettings,
     AsbplayerSettings,
     KeyBindName,
-    SubtitleListPreference,
     SubtitleSettings,
     TextSubtitleSettings,
+    DictionaryTrack,
+} from '.';
+import {
+    SubtitleListPreference,
     textSubtitleSettingsKeys,
     VideoSubtitleSplitBehavior,
     TokenMatchStrategyPriority,
     TokenMatchStrategy,
     TokenStyling,
-    DictionaryTrack,
     TokenReadingAnnotation,
     TokenFrequencyAnnotation,
     getFullyKnownTokenStatus,
@@ -277,7 +279,7 @@ export const defaultSettings: AsbplayerSettings = {
         yleAreena: {},
         hboMax: {},
         stremio: {},
-        nijapanese: {},
+        cijapanese: {},
         iwanttfc: {},
         svtplay: {},
         urplay: {},

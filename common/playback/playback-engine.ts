@@ -1,28 +1,22 @@
-import {
-    defaultSettings,
-    isTrackSeekable,
-    type AsbplayerSettings,
-    type SettingsProvider,
-} from '@project/common/settings';
+import { defaultSettings, isTrackSeekable } from '@project/common/settings';
+import type { AsbplayerSettings, SettingsProvider } from '@project/common/settings';
 import type { IndexedSubtitleModel, PlaybackState } from '@project/common';
 import { PlayMode } from '@project/common';
-import { formatAsSignedMs } from '@project/common/util';
+import { asbWarn, formatAsSignedMs } from '@project/common/util';
 import {
     buildPlaybackPlan,
     playbackPlansEqual,
-    type PlaybackPlan,
     playbackPlanCorrectionToleranceMs,
 } from '@project/common/playback/plan/playback-plan';
-import PlaybackPlanExecutor, {
-    type PlaybackPlanExecutorCallbacks,
-} from '@project/common/playback/plan/playback-plan-executor';
+import type { PlaybackPlan } from '@project/common/playback/plan/playback-plan';
+import PlaybackPlanExecutor from '@project/common/playback/plan/playback-plan-executor';
+import type { PlaybackPlanExecutorCallbacks } from '@project/common/playback/plan/playback-plan-executor';
 import PlaybackModeController, {
     minimumPlaybackRate,
     normalizePlaybackRate,
-    playbackModeNotifications,
     playbackModesFromSettings,
-    type PlayModeTransition,
 } from '@project/common/playback/controllers/playback-mode-controller';
+import type { PlayModeTransition } from '@project/common/playback/controllers/playback-mode-controller';
 import PlaybackPositionController from '@project/common/playback/controllers/playback-position-controller';
 import PlaybackPrimedListeningController from '@project/common/playback/controllers/playback-primed-listening-controller';
 import PlaybackStateController from '@project/common/playback/controllers/playback-state-controller';
@@ -32,6 +26,8 @@ import { CachedLocalStorage } from '@project/common/app/services/cached-local-st
 const internalSeekWatchdogMs = 10_000;
 const subtitleOffsetStorageKey = 'offset';
 const initialPlaybackSettingsAutoHideDurationMs = 6000;
+const playbackRateNotificationKey = 'playback-rate';
+const subtitleOffsetNotificationKey = 'subtitle-offset';
 
 export interface SubtitleOffsetOptions {
     readonly notifyPlayer: boolean;
@@ -46,12 +42,14 @@ export interface InitialPlaybackSettings {
 }
 
 export interface PlaybackRateNotification {
+    readonly key: typeof playbackRateNotificationKey;
     readonly locKey: string;
     readonly replacements: { readonly rate: string };
 }
 
 export function formatPlaybackRateNotification(playbackRate: number, locKey: string): PlaybackRateNotification {
     return {
+        key: playbackRateNotificationKey,
         locKey,
         replacements: {
             rate: String(Number(playbackRate.toFixed(2))),
@@ -65,7 +63,6 @@ export type InitialPlaybackNotification =
 
 export interface InitialPlaybackSettingsNotifications {
     readonly offsetAndRate: InitialPlaybackNotification[];
-    readonly playbackMode: ReturnType<typeof playbackModeNotifications>;
 }
 
 export interface PlaybackEngineCallbacks {
@@ -73,7 +70,11 @@ export interface PlaybackEngineCallbacks {
     readonly play: () => Promise<void>;
     readonly seek: (timestampMs: number) => Promise<void>;
     readonly setPlaybackRate: (playbackRate: number) => void;
-    readonly setSubtitleOffset: (offset: number, options: SubtitleOffsetOptions) => void;
+    readonly setSubtitleOffset: (
+        offset: number,
+        options: SubtitleOffsetOptions,
+        notificationKey: typeof subtitleOffsetNotificationKey
+    ) => void;
     readonly playbackStateChanged: (state: PlaybackState) => void;
     readonly playbackPositionChanged: (position: number | undefined) => void;
     readonly saveSettings: (settings: Partial<AsbplayerSettings>) => void;
@@ -192,7 +193,7 @@ export default class PlaybackEngine<T extends IndexedSubtitleModel> {
                     (!Number.isFinite(actualPlaybackRate) ||
                         Math.abs(actualPlaybackRate - playbackRate) > minimumPlaybackRate)
                 ) {
-                    console.warn('[asbplayer/playback] Playback rate command was not respected', {
+                    asbWarn('playback/rate', 'Playback rate command was not respected', {
                         requestedPlaybackRate: playbackRate,
                         actualPlaybackRate,
                     });
@@ -317,12 +318,10 @@ export default class PlaybackEngine<T extends IndexedSubtitleModel> {
         playbackRate,
         fastForwarding,
         subtitleOffset,
-        playbackModeTransition,
     }: {
         readonly playbackRate: number;
         readonly fastForwarding: boolean;
         readonly subtitleOffset: number;
-        readonly playbackModeTransition: PlayModeTransition;
     }): InitialPlaybackSettingsNotifications {
         const offsetAndRate: InitialPlaybackNotification[] = [];
         if (subtitleOffset !== 0) offsetAndRate.push({ type: 'message', message: formatAsSignedMs(subtitleOffset) });
@@ -337,7 +336,6 @@ export default class PlaybackEngine<T extends IndexedSubtitleModel> {
         }
         return {
             offsetAndRate,
-            playbackMode: playbackModeNotifications(playbackModeTransition),
         };
     }
 
@@ -358,14 +356,13 @@ export default class PlaybackEngine<T extends IndexedSubtitleModel> {
         this.rebuildPlan({ initializePlaybackRate: true });
 
         const subtitleOffset = this.lastSubtitleOffset;
-        this.callbacks.setSubtitleOffset(subtitleOffset, { notifyPlayer: false });
+        this.callbacks.setSubtitleOffset(subtitleOffset, { notifyPlayer: false }, subtitleOffsetNotificationKey);
         const fastForwarding = this.executor.isFastForwarding;
         const playbackRate = fastForwarding ? this.plan.fastForward!.playbackRate : this.plan.playbackRate;
         const notifications = this.initialPlaybackSettingsNotifications({
             playbackRate,
             fastForwarding,
             subtitleOffset,
-            playbackModeTransition,
         });
         this.callbacks.initialPlaybackSettingsChanged({
             autoHideDuration: initialPlaybackSettingsAutoHideDurationMs,
@@ -508,7 +505,7 @@ export default class PlaybackEngine<T extends IndexedSubtitleModel> {
         } else {
             this.subtitleOffsetStorage.set(subtitleOffsetStorageKey, String(offset));
         }
-        this.callbacks.setSubtitleOffset(offset, options);
+        this.callbacks.setSubtitleOffset(offset, options, subtitleOffsetNotificationKey);
         this.playbackStateController.notify(this.timingDriver.currentTimeMs(), { force: true });
     }
 
@@ -674,7 +671,7 @@ export default class PlaybackEngine<T extends IndexedSubtitleModel> {
         let watchdogHandle: ReturnType<typeof setTimeout> | undefined;
         const watchdog = new Promise<'cancelled'>((resolve) => {
             watchdogHandle = setTimeout(() => {
-                console.warn('[asbplayer/playback] Internal seek did not complete before the watchdog timeout', {
+                asbWarn('playback/seek', 'Internal seek did not complete before the watchdog timeout', {
                     targetTimestampMs,
                     timeoutMs: internalSeekWatchdogMs,
                 });
@@ -699,7 +696,7 @@ export default class PlaybackEngine<T extends IndexedSubtitleModel> {
         const actualTimestampMs = this.timingDriver.currentTimeMs();
         const frameTimeMs = this.timingDriver.frameTimeMs();
         if (frameTimeMs <= 0 || Math.abs(actualTimestampMs - targetTimestampMs) <= frameTimeMs / 2) return;
-        console.warn(`[asbplayer/playback] ${command} command has a timestamp mismatch`, {
+        asbWarn('playback/seek', `${command} command has a timestamp mismatch`, {
             targetTimestampMs,
             actualTimestampMs,
             frameTimeMs,

@@ -20,6 +20,99 @@ export interface PlaybackModeRememberSettings {
     readonly lastPlaybackModes: PlayMode[];
 }
 
+export const playbackModesSummaryNotificationKey = 'playback-modes-summary';
+export const playbackModeTransitionNotificationKey = 'playback-mode-transition';
+export const playbackModeNotificationJoin = ' | ';
+const playbackModesSummaryJoin = ' + ';
+
+type LazyLocalizableString = (localize: Localizer) => string;
+
+export interface PlaybackModeNotificationText {
+    readonly key: string;
+    readonly text: string | LazyLocalizableString;
+}
+
+export interface PlaybackModeNotificationFormatOptions {
+    readonly includeTransition?: boolean;
+    readonly summarySeparator?: string;
+}
+
+const playbackModeTransitionLocKey = (mode: PlayMode, enabled: boolean): string | undefined => {
+    switch (mode) {
+        case PlayMode.autoPause:
+            return enabled ? 'info.enabledAutoPause' : 'info.disabledAutoPause';
+        case PlayMode.condensed:
+            return enabled ? 'info.enabledCondensedPlayback' : 'info.disabledCondensedPlayback';
+        case PlayMode.fastForward:
+            return enabled ? 'info.enabledFastForwardPlayback' : 'info.disabledFastForwardPlayback';
+        case PlayMode.repeat:
+            return enabled ? 'info.enabledRepeatPlayback' : 'info.disabledRepeatPlayback';
+        default:
+            return;
+    }
+};
+
+export const playbackModeLabelLocKey = (mode: PlayMode): string => {
+    switch (mode) {
+        case PlayMode.normal:
+            return 'controls.normalMode';
+        case PlayMode.condensed:
+            return 'controls.condensedMode';
+        case PlayMode.autoPause:
+            return 'controls.autoPauseMode';
+        case PlayMode.fastForward:
+            return 'controls.fastForwardMode';
+        case PlayMode.repeat:
+            return 'controls.repeatMode';
+    }
+};
+
+const playbackModesForSummary: readonly PlayMode[] = [
+    PlayMode.condensed,
+    PlayMode.fastForward,
+    PlayMode.autoPause,
+    PlayMode.repeat,
+];
+
+type Localizer = (locKey: string) => string;
+
+export const formatPlaybackModeNotifications = (
+    transition: PlayModeTransition,
+    { includeTransition = true, summarySeparator = ': ' }: PlaybackModeNotificationFormatOptions = {}
+): PlaybackModeNotificationText[] => {
+    const enabledModes = playbackModesForSummary.filter((mode) => transition.modes.has(mode));
+    const notifications: PlaybackModeNotificationText[] = [
+        {
+            key: playbackModesSummaryNotificationKey,
+            text: (localize: Localizer) =>
+                `${localize('settings.playbackModes')}${summarySeparator}${
+                    enabledModes.length > 0
+                        ? enabledModes
+                              .map((mode) => localize(playbackModeLabelLocKey(mode)))
+                              .join(playbackModesSummaryJoin)
+                        : localize(playbackModeLabelLocKey(PlayMode.normal))
+                }`,
+        },
+    ];
+    if (!includeTransition) return notifications;
+
+    const transitionText = (localize: Localizer) =>
+        [
+            ...[...transition.removed].map((mode) => playbackModeTransitionLocKey(mode, false)),
+            ...[...transition.added].map((mode) => playbackModeTransitionLocKey(mode, true)),
+        ]
+            .filter((locKey): locKey is string => locKey !== undefined)
+            .map(localize)
+            .join(playbackModeNotificationJoin);
+    if (transitionText) {
+        notifications.push({
+            key: playbackModeTransitionNotificationKey,
+            text: transitionText,
+        });
+    }
+    return notifications;
+};
+
 export const playbackModesFromSettings = ({
     rememberPlaybackModes,
     lastPlaybackModes,
