@@ -1798,4 +1798,33 @@ describe('PlaybackEngine', () => {
         expect(harness.pauses).toEqual([]);
         expect(harness.playbackStates.at(-1)?.showingSubtitleIndexes).toEqual([0]);
     });
+
+    it('keeps the primed listening reading window through an auto-pause correction seek', async () => {
+        jest.useFakeTimers();
+
+        try {
+            const harness = await makePlaybackEngine([PlayMode.primedListening], 500, [subtitle], {
+                settings: {
+                    primedListeningReadingTimePerCharacterMs: 100,
+                    primedListeningMinimumReadingTimeMs: 500,
+                    primedListeningMaximumReadingTimeMs: 2000,
+                    primedListeningResumeDelayMs: 300,
+                },
+            });
+
+            // Overshooting the block start makes the executor correct the position with an internal
+            // seek, which the media reports back as a discontinuity.
+            await harness.driver.time(1200);
+            harness.driver.discontinuity(harness.driver.timestampMs);
+
+            expect(harness.pauses).toHaveLength(1);
+            expect(harness.playbackStates.at(-1)?.showingSubtitleIndexes).toEqual([0]);
+
+            jest.advanceTimersByTime(subtitle.text.length * 100 + 300);
+
+            expect(harness.plays).toHaveLength(1);
+        } finally {
+            jest.useRealTimers();
+        }
+    });
 });

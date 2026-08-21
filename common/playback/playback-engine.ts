@@ -254,9 +254,10 @@ export default class PlaybackEngine<T extends IndexedSubtitleModel> {
                 );
             },
             onDiscontinuity: (currentTimestampMs) => {
-                this.primedListeningController.cancel();
                 this.playbackPositionController.discontinuity(currentTimestampMs);
-                this.executor.handleDiscontinuity(currentTimestampMs);
+                const { cause } = this.executor.handleDiscontinuity(currentTimestampMs);
+                // Auto-pause corrections seek right after pausing, so only a user seek ends a reading window.
+                if (cause === 'user-seek') this.primedListeningController.cancel();
                 this.playbackStateController.notify(currentTimestampMs, { force: true });
             },
             onCancel: (options) => this.executor.cancelPendingOperations(options),
