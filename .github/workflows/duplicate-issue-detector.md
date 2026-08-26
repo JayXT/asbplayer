@@ -17,6 +17,7 @@ model: qwen3.7-plus
 max-ai-credits: -1 # Bypass built-in pricing table
 engine:
   id: codex
+  version: 0.91.0
   args:
     - "-c"
     - "model_providers.openai.wire_api=chat"
