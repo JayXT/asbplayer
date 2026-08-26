@@ -13,7 +13,7 @@ on:
         required: true
         type: string
 
-model: qwen3.7plus
+model: qwen3.7-plus
 engine:
   id: codex
   env:
