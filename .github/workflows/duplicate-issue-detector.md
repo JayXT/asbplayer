@@ -14,6 +14,7 @@ on:
         type: string
 
 model: qwen3.7-plus
+max-ai-credits: -1 # Bypass built-in pricing table
 engine:
   id: codex
   env:
