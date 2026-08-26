@@ -20,9 +20,16 @@ engine:
   version: 0.91.0
   args:
     - "-c"
-    - "model_providers.openai.wire_api=chat"
+    - "model_provider=opencode-go"
+    - "-c"
+    - "model_providers.opencode-go.name=opencode-go"
+    - "-c"
+    - "model_providers.opencode-go.base_url=https://opencode.ai/zen/go/v1"
+    - "-c"
+    - "model_providers.opencode-go.env_key=OPENAI_API_KEY"
+    - "-c"
+    - "model_providers.opencode-go.wire_api=chat"
   env:
-    OPENAI_BASE_URL: https://opencode.ai/zen/go/v1
     OPENAI_API_KEY: ${{ secrets.OPENCODE_GO_API_KEY }}
 
 network:
