@@ -17,6 +17,9 @@ model: qwen3.7-plus
 max-ai-credits: -1 # Bypass built-in pricing table
 engine:
   id: codex
+  args:
+    - "-c"
+    - "model_providers.openai.wire_api=chat"
   env:
     OPENAI_BASE_URL: https://opencode.ai/zen/go/v1
     OPENAI_API_KEY: ${{ secrets.OPENCODE_GO_API_KEY }}
