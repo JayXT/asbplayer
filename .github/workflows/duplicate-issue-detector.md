@@ -13,23 +13,12 @@ on:
         required: true
         type: string
 
-model: qwen3.7-plus
+model: gpt-5.6-luna
 max-ai-credits: -1 # Bypass built-in pricing table
 engine:
   id: codex
-  version: 0.91.0
-  args:
-    - "-c"
-    - "model_provider=opencode-go"
-    - "-c"
-    - "model_providers.opencode-go.name=opencode-go"
-    - "-c"
-    - "model_providers.opencode-go.base_url=https://opencode.ai/zen/go/v1"
-    - "-c"
-    - "model_providers.opencode-go.env_key=OPENAI_API_KEY"
-    - "-c"
-    - "model_providers.opencode-go.wire_api=chat"
   env:
+    OPENAI_BASE_URL: https://opencode.ai/zen/go/v1
     OPENAI_API_KEY: ${{ secrets.OPENCODE_GO_API_KEY }}
 
 network:
@@ -52,7 +41,7 @@ tools:
 timeout-minutes: 10
 ---
 
-# Duplicate Issue Detector
+# Duplicate issue detector
 
 Analyze issue #${{ github.event.issue.number || inputs.issue-number }}, and find similar issues in this repository.
 
