@@ -9,16 +9,26 @@ type JsonRecord = Record<string, unknown>;
 
 const maximumJsonObjects = 100;
 const maximumJsonDepth = 4;
+export const detectedSubtitleLabel = 'Detected subtitle';
 const manifestUrlFields = new Set(['hls', 'hlsurl', 'm3u8', 'm3u8url', 'manifesturl', 'playlisturl']);
 const subtitleContainerKeys = new Set([
     'caption',
+    'captiontracks',
     'captions',
     'subtitle',
+    'subtitleinfos',
     'subtitles',
+    'subtitleset',
     'subtitletracks',
     'texttracks',
     'tracks',
 ]);
+const supportedFormatHint = /"format"\s*:\s*"(?:\.?(?:ass|dfxp|srt|ssa|ttml2?|vtt)|subrip|webvtt)"/i;
+const subtitleContainerHint =
+    /"(?:captions?|captiontracks?|subtitles?|subtitleinfos?|subtitleset|subtitletracks?|texttracks?|timedtext|transcripts?)"\s*:/i;
+const subtitleSourceHint =
+    /"(?:baseurl|file|src|source|url)"\s*:\s*"[^"]*(?:caption|subtit|texttrack|timedtext|transcript|\.ass(?:[?#]|$)|\.dfxp(?:[?#]|$)|\.srt(?:[?#]|$)|\.ssa(?:[?#]|$)|\.ttml(?:[?#]|$)|\.vtt(?:[?#]|$))/i;
+const subtitleKindHint = /"kind"\s*:\s*"(?:captions?|subtitles?)"/i;
 
 export const subtitleExtensionsByContentType: Readonly<Record<string, string>> = {
     'application/dfxp+xml': 'dfxp',
@@ -77,48 +87,106 @@ export function nonEmptyString(value: unknown) {
     return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 }
 
+export function hasSubtitleMetadataHint(text: string) {
+    return (
+        subtitleContainerHint.test(text) &&
+        (supportedFormatHint.test(text) || subtitleSourceHint.test(text) || subtitleKindHint.test(text))
+    );
+}
+
 interface TrackDefinitionOptions {
     strict: boolean;
     subtitleContext: boolean;
+    inheritedContentType?: string;
+    inheritedLanguage?: string;
+}
+
+function normalizedMetadataKey(key: string) {
+    const localName = key.slice(key.lastIndexOf(':') + 1);
+    return localName.replace(/^[@#]/, '').toLowerCase();
+}
+
+function metadataString(value: JsonRecord, keys: readonly string[]) {
+    for (const expectedKey of keys) {
+        for (const [key, candidate] of Object.entries(value)) {
+            if (normalizedMetadataKey(key) !== expectedKey) continue;
+            const stringValue = nonEmptyString(candidate);
+            if (stringValue !== undefined) return stringValue;
+        }
+    }
+    return;
+}
+
+function subtitleContentType(value: JsonRecord) {
+    const contentType = normalizedContentType(metadataString(value, ['mimetype', 'contenttype', 'type']));
+    return subtitleExtensionsByContentType[contentType ?? ''] === undefined ? undefined : contentType;
+}
+
+function metadataLanguage(value: JsonRecord) {
+    return metadataString(value, ['srclang', 'language', 'languagecodename', 'lang', 'locale'])?.toLowerCase();
+}
+
+function metadataLabel(value: JsonRecord) {
+    return metadataString(value, ['label', 'name', 'display', 'filename']);
+}
+
+function metadataSource(value: JsonRecord, subtitleContext: boolean, declaredKind?: string) {
+    const source = metadataString(value, ['src', 'file', 'url', 'source', 'text']);
+    if (source !== undefined) return source;
+    if (subtitleContext || declaredKind === 'subtitles' || declaredKind === 'captions') {
+        return metadataString(value, ['baseurl']);
+    }
+    return;
+}
+
+function subtitleReferenceUrl(key: string, value: string, baseUrl: string) {
+    const normalizedKey = normalizedMetadataKey(key);
+    if (!/(?:caption|subtit|timedtext|texttrack|transcript)/.test(normalizedKey)) return;
+    if (!/(?:endpoint|href|ref|uri|url)$/.test(normalizedKey)) return;
+    if (!/^(?:https?:)?\/\/|^\.{0,2}\//i.test(value)) return;
+    return absoluteHttpUrl(value, baseUrl);
 }
 
 function trackDefinitionFromMetadata(
     value: JsonRecord,
     baseUrl: string,
-    { strict, subtitleContext }: TrackDefinitionOptions
+    { strict, subtitleContext, inheritedContentType, inheritedLanguage }: TrackDefinitionOptions
 ): VideoDataSubtitleTrackDef | undefined {
-    const kind = nonEmptyString(value.kind)?.toLowerCase();
-    const semanticType = nonEmptyString(value.type)?.toLowerCase();
+    const kind = metadataString(value, ['kind'])?.toLowerCase();
+    const semanticType = metadataString(value, ['type'])?.toLowerCase();
     const declaredKind =
         kind ?? (semanticType === 'subtitles' || semanticType === 'captions' ? semanticType : undefined);
-    const contentType = normalizedContentType(value.mimeType ?? value.contentType ?? value.type);
-    const contentTypeExtension = subtitleExtensionsByContentType[contentType ?? ''];
+    const declaredContentType = normalizedContentType(metadataString(value, ['mimetype', 'contenttype', 'type']));
+    const declaredContentTypeExtension = subtitleExtensionsByContentType[declaredContentType ?? ''];
+    const contentTypeExtension =
+        declaredContentTypeExtension ?? subtitleExtensionsByContentType[inheritedContentType ?? ''];
+    const format = metadataString(value, ['format']);
+    const formatExtension = format === undefined ? undefined : normalizeSubtitleExtension(format.replace(/^\./, ''));
 
     // Explicit non-subtitle kinds win over a subtitle-looking URL or MIME type.
     if (declaredKind !== undefined && declaredKind !== 'subtitles' && declaredKind !== 'captions') return;
-    if (!subtitleContext && declaredKind === undefined && contentTypeExtension === undefined) return;
-    if (strict && contentType?.includes('/') === true && contentTypeExtension === undefined) return;
+    if (strict && declaredContentType?.includes('/') === true && declaredContentTypeExtension === undefined) return;
+    if (strict && format !== undefined && formatExtension === undefined) return;
+    if (
+        !subtitleContext &&
+        declaredKind === undefined &&
+        contentTypeExtension === undefined &&
+        formatExtension === undefined
+    ) {
+        return;
+    }
 
-    const source = nonEmptyString(value.src) ?? nonEmptyString(value.file) ?? nonEmptyString(value.url);
+    const source = metadataSource(value, subtitleContext, declaredKind);
     if (source === undefined) return;
 
     const url = absoluteSubtitleUrl(source, baseUrl);
     if (url === undefined) return;
 
-    const format = nonEmptyString(value.format);
-    const formatExtension = format === undefined ? undefined : normalizeSubtitleExtension(format.replace(/^\./, ''));
-    if (strict && format !== undefined && formatExtension === undefined) return;
     const extension = formatExtension ?? contentTypeExtension ?? subtitleExtensionForUrl(url);
     if (extension === undefined) return;
 
-    const language =
-        nonEmptyString(value.srclang) ??
-        nonEmptyString(value.srcLang) ??
-        nonEmptyString(value.language) ??
-        nonEmptyString(value.lang);
-    const normalizedLanguage = language?.toLowerCase();
-    const label =
-        nonEmptyString(value.label) ?? nonEmptyString(value.name) ?? normalizedLanguage ?? 'Detected subtitle';
+    const normalizedLanguage = metadataLanguage(value) ?? inheritedLanguage;
+    const label = metadataLabel(value) ?? normalizedLanguage ?? detectedSubtitleLabel;
 
     return { label, language: normalizedLanguage, url, extension };
 }
@@ -126,12 +194,21 @@ function trackDefinitionFromMetadata(
 export interface JsonDiscovery {
     tracks: VideoDataSubtitleTrack[];
     manifestUrls: Set<string>;
+    metadataUrls: Set<string>;
+    extensionlessTracks: ExtensionlessSubtitleTrack[];
+}
+
+export interface ExtensionlessSubtitleTrack {
+    label: string;
+    language?: string;
+    url: string;
 }
 
 export interface JsonDiscoveryOptions {
     contextual?: boolean;
     maximumDepth?: number;
     maximumObjects?: number;
+    rootSubtitleContext?: boolean;
 }
 
 function manifestUrlFromJson(value: JsonRecord, baseUrl: string): string | undefined {
@@ -144,16 +221,24 @@ function manifestUrlFromJson(value: JsonRecord, baseUrl: string): string | undef
 }
 
 export function tracksFromJson(value: unknown, baseUrl: string, options: JsonDiscoveryOptions = {}): JsonDiscovery {
-    if (value === null || typeof value !== 'object') return { tracks: [], manifestUrls: new Set() };
+    if (value === null || typeof value !== 'object') {
+        return { tracks: [], manifestUrls: new Set(), metadataUrls: new Set(), extensionlessTracks: [] };
+    }
 
     const contextual = options.contextual === true;
     const depthLimit = options.maximumDepth ?? maximumJsonDepth;
     const objectLimit = options.maximumObjects ?? maximumJsonObjects;
     const tracks: VideoDataSubtitleTrack[] = [];
     const manifestUrls = new Set<string>();
-    const queue: Array<{ value: object; depth: number; subtitleContext: boolean }> = [
-        { value, depth: 0, subtitleContext: false },
-    ];
+    const metadataUrls = new Set<string>();
+    const extensionlessTracks: ExtensionlessSubtitleTrack[] = [];
+    const queue: Array<{
+        value: object;
+        depth: number;
+        subtitleContext: boolean;
+        inheritedContentType?: string;
+        inheritedLanguage?: string;
+    }> = [{ value, depth: 0, subtitleContext: contextual && options.rootSubtitleContext === true }];
     let next = 0;
     let visited = 0;
 
@@ -163,26 +248,86 @@ export function tracksFromJson(value: unknown, baseUrl: string, options: JsonDis
 
         try {
             const record = current.value as JsonRecord;
+            const inheritedContentType = subtitleContentType(record) ?? current.inheritedContentType;
+            const inheritedLanguage = metadataLanguage(record) ?? current.inheritedLanguage;
             const manifestUrl = manifestUrlFromJson(record, baseUrl);
             if (manifestUrl !== undefined) manifestUrls.add(manifestUrl);
 
             const definition = trackDefinitionFromMetadata(record, baseUrl, {
                 strict: !contextual,
                 subtitleContext: current.subtitleContext,
+                inheritedContentType,
+                inheritedLanguage,
             });
             if (definition !== undefined) tracks.push(trackFromDef(definition));
+            else if (contextual && current.subtitleContext) {
+                const kind = metadataString(record, ['kind'])?.toLowerCase();
+                const declaredType = normalizedContentType(metadataString(record, ['mimetype', 'contenttype', 'type']));
+                const hasExplicitSubtitleMetadata = Object.keys(record).some((key) => {
+                    const normalizedKey = normalizedMetadataKey(key);
+                    return (
+                        /(?:caption|subtit|timedtext|texttrack|transcript)/.test(normalizedKey) &&
+                        /(?:code|format|id|kind|label|lang|language|locale|name|position|source|src|type|uri|url)/.test(
+                            normalizedKey
+                        )
+                    );
+                });
+                const format = metadataString(record, ['format']);
+                const formatExtension =
+                    format === undefined ? undefined : normalizeSubtitleExtension(format.replace(/^\./, ''));
+                const language = metadataLanguage(record) ?? inheritedLanguage;
+                const label = metadataLabel(record);
+                const source = metadataSource(record, true, kind);
+                const url = source === undefined ? undefined : absoluteHttpUrl(source, baseUrl);
+                if (
+                    (hasExplicitSubtitleMetadata ||
+                        kind === 'subtitles' ||
+                        kind === 'captions' ||
+                        formatExtension !== undefined ||
+                        (url !== undefined && (language !== undefined || label !== undefined))) &&
+                    (kind === undefined || kind === 'subtitles' || kind === 'captions') &&
+                    (declaredType === undefined ||
+                        !declaredType.includes('/') ||
+                        subtitleExtensionsByContentType[declaredType] !== undefined) &&
+                    url !== undefined &&
+                    extractExtension(url, '') === '' &&
+                    !extensionlessTracks.some((track) => track.url === url)
+                ) {
+                    extensionlessTracks.push({ label: label ?? language ?? detectedSubtitleLabel, language, url });
+                }
+            }
 
             if (current.depth >= depthLimit) continue;
             for (const [key, child] of Object.entries(current.value)) {
                 const subtitleContext =
-                    current.subtitleContext || (contextual && subtitleContainerKeys.has(key.toLowerCase()));
+                    current.subtitleContext || (contextual && subtitleContainerKeys.has(normalizedMetadataKey(key)));
                 if (child !== null && typeof child === 'object') {
-                    queue.push({ value: child, depth: current.depth + 1, subtitleContext });
-                } else if (subtitleContext && typeof child === 'string') {
+                    queue.push({
+                        value: child,
+                        depth: current.depth + 1,
+                        subtitleContext,
+                        inheritedContentType,
+                        inheritedLanguage,
+                    });
+                } else if (contextual && typeof child === 'string') {
+                    const referenceUrl = subtitleReferenceUrl(key, child, baseUrl);
+                    const referenceExtension =
+                        referenceUrl === undefined ? undefined : subtitleExtensionForUrl(referenceUrl);
+                    if (referenceUrl !== undefined && referenceExtension === undefined) metadataUrls.add(referenceUrl);
+                    else if (referenceUrl !== undefined && referenceExtension !== undefined) {
+                        tracks.push(
+                            trackFromDef({
+                                label: inheritedLanguage ?? normalizedMetadataKey(key),
+                                url: referenceUrl,
+                                extension: referenceExtension,
+                            })
+                        );
+                    }
+                    if (definition !== undefined || !subtitleContext) continue;
                     const url = absoluteSubtitleUrl(child, baseUrl);
                     const extension = url === undefined ? undefined : subtitleExtensionForUrl(url);
                     if (url !== undefined && extension !== undefined) {
-                        tracks.push(trackFromDef({ label: key || 'Detected subtitle', url, extension }));
+                        tracks.push(trackFromDef({ label: key || detectedSubtitleLabel, url, extension }));
                     }
                 }
             }
@@ -191,7 +336,7 @@ export function tracksFromJson(value: unknown, baseUrl: string, options: JsonDis
         }
     }
 
-    return { tracks, manifestUrls };
+    return { tracks, manifestUrls, metadataUrls, extensionlessTracks };
 }
 
 export async function responseTextWithinLimit(response: Response, maximumLength: number, timeoutMs?: number) {

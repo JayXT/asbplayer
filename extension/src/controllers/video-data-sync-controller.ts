@@ -1,4 +1,4 @@
-import { asbError } from '@project/common/util';
+import { arrayEquals, asbError } from '@project/common/util';
 import type {
     ActiveProfileMessage,
     ConfirmedVideoDataSubtitleTrack,
@@ -58,9 +58,9 @@ interface ShowOptions {
     fromAsbplayerId?: string;
 }
 
-interface RequestSubtitlesOptions {
-    readonly videoChanged: boolean;
-}
+type RequestSubtitlesOptions =
+    | { readonly kind: 'reload'; readonly videoChanged: boolean }
+    | { readonly kind: 'refresh-open-picker' };
 
 const fetchDataForLanguageOnDemand = (language: string): Promise<VideoData> => {
     return new Promise((resolve) => {
@@ -92,6 +92,7 @@ export default class VideoDataSyncController {
     private _fullscreenElement?: Element;
     private _activeElement?: Element;
     private _autoSyncAttempted: boolean = false;
+    private _refreshingOpenPicker: boolean = false;
     private _dataReceivedListener?: (event: Event) => void;
     private _dataReceivedEventTarget?: EventTarget;
     private _isTutorial: boolean;
@@ -133,6 +134,7 @@ export default class VideoDataSyncController {
         this._dataReceivedListener = undefined;
         this._dataReceivedEventTarget = undefined;
         this._syncedData = undefined;
+        this._refreshingOpenPicker = false;
         this._cleanupPlayBlocker();
         this._openedLocation = undefined;
     }
@@ -166,18 +168,18 @@ export default class VideoDataSyncController {
         return this._openedLocation;
     }
 
-    async requestSubtitles({ videoChanged }: RequestSubtitlesOptions) {
+    async requestSubtitles(request: RequestSubtitlesOptions) {
         if (!this._context.hasPageScript) {
             return;
         }
 
-        // While the picker is open on the same location, skip refresh so
-        // player events do not clobber an in-progress user selection. On a
-        // true soft-navigation or an explicitly reported video change,
-        // dismiss the stale picker and continue.
-        if (this.pickerVisible) {
+        // While the picker is open on the same location, ignore ordinary reloads
+        // so player events do not clobber an in-progress user selection. On a true
+        // soft-navigation or an explicitly reported video change, dismiss the stale
+        // picker and continue.
+        if (this.pickerVisible && request.kind === 'reload') {
             const locationChanged = this.openedLocation !== undefined && window.location.href !== this.openedLocation;
-            if (locationChanged || videoChanged) {
+            if (locationChanged || request.videoChanged) {
                 this._hideAndResume();
             } else {
                 return;
@@ -190,8 +192,13 @@ export default class VideoDataSyncController {
             return;
         }
 
-        this._syncedData = undefined;
-        this._autoSyncAttempted = false;
+        if (request.kind === 'refresh-open-picker') {
+            this._refreshingOpenPicker = true;
+        } else {
+            this._syncedData = undefined;
+            this._autoSyncAttempted = false;
+            this._refreshingOpenPicker = false;
+        }
 
         const eventTarget = pageDelegate.config.generic ? this._context.video : document;
         if (!this._dataReceivedListener || this._dataReceivedEventTarget !== eventTarget) {
@@ -242,6 +249,11 @@ export default class VideoDataSyncController {
         const model = await this._buildModel(additionalFields);
         this._prepareShow();
         client.updateState(model);
+
+        const pageDelegate = await currentPageDelegate();
+        if (pageDelegate.config.refreshSubtitleDataOnPickerOpen === true) {
+            void this.requestSubtitles({ kind: 'refresh-open-picker' });
+        }
     }
 
     private async _buildModel(additionalFields: Partial<VideoDataUiModel>) {
@@ -363,31 +375,64 @@ export default class VideoDataSyncController {
     }
 
     private async _setSyncedData(data: VideoData) {
-        const wasLoading = this._syncedData?.subtitles === undefined;
+        const previousData = this._syncedData;
         this._syncedData = data;
 
-        if (this._syncedData?.subtitles !== undefined && (await this._canAutoSync())) {
-            if (!this._autoSyncAttempted) {
-                this._autoSyncAttempted = true;
-                const subs = this._matchLastSyncedWithAvailableTracks();
+        if (this._updateOpenPickerFromRefresh(previousData, data)) return;
 
-                if (subs.completeMatch && !this.pickerVisible) {
-                    const autoSelectedTracks: VideoDataSubtitleTrack[] = subs.autoSelectedTracks;
-                    await this._syncData(autoSelectedTracks);
-                } else if (!subs.completeMatch && !this.pickerVisible) {
-                    const shouldPrompt = await this._settings.getSingle('streamingAutoSyncPromptOnFailure');
+        const wasLoading = previousData?.subtitles === undefined;
+        if (await this._handleAutoSync(wasLoading)) return;
 
-                    if (shouldPrompt) {
-                        await this.show({ reason: VideoDataUiOpenReason.failedToAutoLoadPreferredTrack });
-                    }
-                } else if (wasLoading) {
-                    // Picker is open in loading state. Populate it now that tracks have arrived.
-                    this._frame.clientIfLoaded?.updateState(await this._buildModel({}));
-                }
-            }
-        } else if (!this.pickerVisible || wasLoading) {
-            this._frame.clientIfLoaded?.updateState(await this._buildModel({}));
+        await this._updatePickerAfterDataReceived(wasLoading);
+    }
+
+    private _updateOpenPickerFromRefresh(previousData: VideoData | undefined, data: VideoData): boolean {
+        if (!this._refreshingOpenPicker || !this.pickerVisible || previousData?.subtitles === undefined) {
+            return false;
         }
+
+        const previousSubtitleIds = previousData.subtitles.map((track) => track.id);
+        const subtitleIds = data.subtitles?.map((track) => track.id);
+        if (!arrayEquals(previousSubtitleIds, subtitleIds)) {
+            this._frame.clientIfLoaded?.updateState({
+                subtitles: data.subtitles ?? [],
+                suggestedName: data.basename,
+                error: data.error ?? '',
+                isLoading: false,
+            });
+        }
+
+        return true;
+    }
+
+    private async _handleAutoSync(wasLoading: boolean): Promise<boolean> {
+        if (this._syncedData?.subtitles === undefined || !(await this._canAutoSync())) return false;
+        if (this._autoSyncAttempted) return true;
+        this._autoSyncAttempted = true;
+
+        if (this.pickerVisible) {
+            if (wasLoading) this._frame.clientIfLoaded?.updateState(await this._buildModel({})); // Picker is open in loading state. Populate it now that tracks have arrived.
+            return true;
+        }
+
+        const subs = this._matchLastSyncedWithAvailableTracks();
+        if (subs.completeMatch) {
+            const autoSelectedTracks: VideoDataSubtitleTrack[] = subs.autoSelectedTracks;
+            await this._syncData(autoSelectedTracks);
+        } else {
+            const shouldPrompt = await this._settings.getSingle('streamingAutoSyncPromptOnFailure');
+
+            if (shouldPrompt) {
+                await this.show({ reason: VideoDataUiOpenReason.failedToAutoLoadPreferredTrack });
+            }
+        }
+
+        return true;
+    }
+
+    private async _updatePickerAfterDataReceived(wasLoading: boolean) {
+        if (this.pickerVisible && !wasLoading) return;
+        this._frame.clientIfLoaded?.updateState(await this._buildModel({}));
     }
 
     private async _canAutoSync(): Promise<boolean> {
@@ -549,6 +594,7 @@ export default class VideoDataSyncController {
     private _hideAndResume() {
         this._cleanupPlayBlocker();
         this._openedLocation = undefined;
+        this._refreshingOpenPicker = false;
         this._context.keyBindings.bind(this._context);
         this._context.subtitleController.forceHideSubtitles = false;
         this._context.mobileVideoOverlayController.forceHide = false;
