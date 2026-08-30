@@ -16,7 +16,7 @@ server: AsbplayerWebSocketServer | None = None
 
 def _on_add_note(self: Collection, note: Note, deck_id: DeckId) -> OpChanges:
     """Monkey-patched add_note that intercepts all note additions."""
-    res: OpChanges = Collection._original_add_note(self, note, deck_id)
+    res: OpChanges = Collection._original_add_note(self, note, deck_id)  # pyright: ignore[reportAttributeAccessIssue]
     mw.taskman.run_on_main(lambda: _handle_note_added(note))
     return res
 
@@ -89,8 +89,8 @@ def on_config_updated(addon: str) -> None:
 
 def _setup_hooks() -> None:
     """Set up monkey-patching for Collection.add_note."""
-    Collection._original_add_note = Collection.add_note
-    Collection.add_note = _on_add_note
+    Collection._original_add_note = Collection.add_note  # pyright: ignore[reportAttributeAccessIssue]
+    Collection.add_note = _on_add_note  # pyright: ignore[reportAttributeAccessIssue]
 
 
 config = AddonConfig(__name__)

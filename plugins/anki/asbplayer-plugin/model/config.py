@@ -1,3 +1,5 @@
+from typing import Any
+
 from aqt import mw
 
 
@@ -8,12 +10,11 @@ class AddonConfig:
 
     def __init__(self, module_name: str) -> None:
         self._module_name = module_name
+        self._config: dict[str, Any] = {}
         self.set_config()
 
     def set_config(self) -> None:
-        self._config = mw.addonManager.getConfig(self._module_name)
-        if self._config is None:
-            self._config = {}
+        self._config = mw.addonManager.getConfig(self._module_name) or {}
 
         changed = False
         if not isinstance(self._config.get("enabled"), bool):
