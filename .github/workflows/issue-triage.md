@@ -32,6 +32,8 @@ safe-outputs:
   add-comment:
   set-issue-type:
     allowed: [Bug, Feature, Task]
+  allowed-domains:
+    - docs.asbplayer.dev
 
 tools:
   bash: false
