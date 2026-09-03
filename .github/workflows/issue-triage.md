@@ -5,7 +5,8 @@ description: |
 on:
   issues:
     types: [opened]
-  reaction: eyes
+  roles: all
+  reaction: none
   workflow_dispatch:
     inputs:
       issue-number:
