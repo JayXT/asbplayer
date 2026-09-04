@@ -29,6 +29,17 @@ export enum PauseOnHoverMode {
     inNotOut = 2,
 }
 
+export enum AutoPauseResumeMode {
+    manual = 'manual',
+    fixed = 'fixed',
+    subtitleLength = 'subtitleLength',
+}
+
+export enum SubtitleVisibility {
+    whenDue = 'whenDue',
+    whilePaused = 'whilePaused',
+}
+
 export enum VideoSubtitleSplitBehavior {
     rememberSplitPosition = 'rememberSplitPosition',
     autoMaximizeVideo = 'autoMaximizeVideo',
@@ -77,6 +88,13 @@ export interface MiscSettings {
     readonly subtitleListTimestampDisplay: SubtitleListTimestampDisplay;
     readonly copyToClipboardOnMine: boolean;
     readonly autoPausePreference: AutoPausePreference;
+    readonly autoPauseResumeMode: AutoPauseResumeMode;
+    readonly autoPauseResumeDelayMs: number;
+    readonly autoPauseFixedDurationMs: number;
+    readonly autoPauseMinimumDurationMs: number;
+    readonly autoPauseMaximumDurationMs: number;
+    readonly autoPauseTimePerCharacterMs: number;
+    readonly subtitleVisibility: SubtitleVisibility;
     readonly subtitleTriggerStartOffset: number;
     readonly subtitleTriggerEndOffset: number;
     readonly subtitleTriggerGapEndOffset: number;
@@ -939,6 +957,8 @@ export interface KeyBindSet {
     readonly increasePlaybackRate: KeyBind;
     readonly toggleSidePanel: KeyBind;
     readonly toggleRepeat: KeyBind;
+    readonly toggleSubtitleVisibility: KeyBind;
+    readonly cycleAutoPauseResumeMode: KeyBind;
     readonly moveBottomSubtitlesUp: KeyBind;
     readonly moveBottomSubtitlesDown: KeyBind;
     readonly moveTopSubtitlesUp: KeyBind;

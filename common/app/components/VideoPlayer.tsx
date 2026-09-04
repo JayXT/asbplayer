@@ -618,6 +618,7 @@ export default function VideoPlayer({
         const playbackEngine = new PlaybackEngine({
             settingsProvider,
             appIntegration: extension.supportsAppIntegration,
+            autoPauseCorrectionSuppressed: false,
             subtitles: subtitlesRef.current,
             playbackModesDisabled: false,
             playbackModesSuppressed: false,
@@ -677,7 +678,7 @@ export default function VideoPlayer({
                     updateSubtitlesWithOffset(offset, options.notifyPlayer, notificationKey),
                 playbackStateChanged: (state) => {
                     playbackStateChangedRef.current(state);
-                    playerChannel.playbackState(state.timestampMs, state.showingSubtitleIndexes, state.paused);
+                    playerChannel.playbackState(state);
                 },
                 playbackPositionChanged: setPendingPlaybackPosition,
                 saveSettings: (settings) => onSettingsChangedRef.current(settings),
@@ -1069,8 +1070,12 @@ export default function VideoPlayer({
     }, []);
 
     playbackStateChangedRef.current = (state) => {
-        showingSubtitleIndexesRef.current = state.showingSubtitleIndexes;
-        updateShowingSubtitles(state.showingSubtitleIndexes);
+        const hiddenSubtitleIndexes = state.hiddenSubtitleIndexes ?? [];
+        const visibleSubtitleIndexes = state.showingSubtitleIndexes.filter(
+            (index) => !hiddenSubtitleIndexes.includes(index)
+        );
+        showingSubtitleIndexesRef.current = visibleSubtitleIndexes;
+        updateShowingSubtitles(visibleSubtitleIndexes);
     };
 
     useEffect(() => {
@@ -1720,6 +1725,54 @@ export default function VideoPlayer({
             () => false
         );
     }, [keyBinder, togglePlaybackMode]);
+
+    useEffect(() => {
+        return keyBinder.bindCycleAutoPauseResumeMode(
+            (event) => {
+                event.preventDefault();
+                const notification = playbackEngineRef.current?.cycleAutoPauseResumeMode();
+                if (notification === undefined) return;
+                setAlert({
+                    open: true,
+                    notifications: [
+                        {
+                            key: notification.key,
+                            message: {
+                                locKey: notification.locKey,
+                                replacements: { value: t(notification.valueLocKey) },
+                            },
+                            severity: 'info',
+                        },
+                    ],
+                });
+            },
+            () => subtitles.length === 0
+        );
+    }, [keyBinder, subtitles.length, t]);
+
+    useEffect(() => {
+        return keyBinder.bindToggleSubtitleVisibility(
+            (event) => {
+                event.preventDefault();
+                const notification = playbackEngineRef.current?.toggleSubtitleVisibility();
+                if (notification === undefined) return;
+                setAlert({
+                    open: true,
+                    notifications: [
+                        {
+                            key: notification.key,
+                            message: {
+                                locKey: notification.locKey,
+                                replacements: { value: t(notification.valueLocKey) },
+                            },
+                            severity: 'info',
+                        },
+                    ],
+                });
+            },
+            () => subtitles.length === 0
+        );
+    }, [keyBinder, subtitles.length, t]);
 
     const handleSubtitlesToggle = useCallback(() => {
         setDisplaySubtitles(!displaySubtitles);

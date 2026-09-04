@@ -490,6 +490,29 @@ const settingsSchema = {
         repeatCountPreference: {
             type: 'number',
         },
+        autoPauseResumeMode: {
+            type: 'string',
+            enum: ['manual', 'fixed', 'subtitleLength'],
+        },
+        autoPauseResumeDelayMs: {
+            type: 'number',
+        },
+        autoPauseFixedDurationMs: {
+            type: 'number',
+        },
+        autoPauseMinimumDurationMs: {
+            type: 'number',
+        },
+        autoPauseMaximumDurationMs: {
+            type: 'number',
+        },
+        autoPauseTimePerCharacterMs: {
+            type: 'number',
+        },
+        subtitleVisibility: {
+            type: 'string',
+            enum: ['whenDue', 'whilePaused'],
+        },
         rememberPlaybackModes: {
             type: 'boolean',
         },
@@ -549,6 +572,8 @@ const settingsSchema = {
                 increasePlaybackRate: { $ref: '/KeyBind' },
                 toggleSidePanel: { $ref: '/KeyBind' },
                 toggleRepeat: { $ref: '/KeyBind' },
+                toggleSubtitleVisibility: { $ref: '/KeyBind' },
+                cycleAutoPauseResumeMode: { $ref: '/KeyBind' },
                 moveBottomSubtitlesUp: { $ref: '/KeyBind' },
                 moveBottomSubtitlesDown: { $ref: '/KeyBind' },
                 moveTopSubtitlesUp: { $ref: '/KeyBind' },
