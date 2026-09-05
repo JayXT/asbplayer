@@ -293,6 +293,7 @@ export const defaultSettings: AsbplayerSettings = {
         svtplay: {},
         urplay: {},
         archive: {},
+        crunchyroll: {},
     },
     webSocketClientEnabled: false,
     webSocketServerUrl: 'ws://127.0.0.1:8766/ws',

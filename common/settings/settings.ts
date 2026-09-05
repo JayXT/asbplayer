@@ -1053,6 +1053,7 @@ export interface PageSettings {
     svtplay: Page;
     urplay: Page;
     archive: Page;
+    crunchyroll: Page;
 }
 
 export interface StreamingVideoSettings {
